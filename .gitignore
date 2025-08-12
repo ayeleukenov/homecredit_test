@@ -4,6 +4,7 @@
 
 ### Mac ###
 .DS_Store
+.vscode/
 
 ### Python ###
 # Byte-compiled / optimized / DLL files
