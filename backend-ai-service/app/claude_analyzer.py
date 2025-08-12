@@ -121,15 +121,21 @@ Return ONLY the JSON object, no other text.
     def _parse_claude_response(self, response_text: str) -> dict[str, Any]:
         """Parse Claude's JSON response"""
         try:
-            json_match = re.search(r"\{.*?\}", response_text, re.DOTALL)
+            logger.info(f"Raw response length: {len(response_text)}")
+            logger.info(f"Raw response repr: {repr(response_text)}")
+
+            json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
             if json_match:
                 json_str = json_match.group(0)
+                logger.info(f"Extracted JSON: {repr(json_str)}")  # Debug line
                 return json.loads(json_str)
             else:
                 raise ValueError("No JSON found in response")
+                
         except (json.JSONDecodeError, ValueError) as e:
             logger.error(f"Failed to parse Claude response: {e}")
             logger.error(f"Response text: {response_text}")
+            logger.error(f"Character at error position: {repr(response_text[440:450])}")  # Show problem area
             raise
 
     def _generate_derived_fields(
