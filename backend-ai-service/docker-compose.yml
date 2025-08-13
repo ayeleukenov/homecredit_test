@@ -8,14 +8,12 @@ services:
     restart: unless-stopped
     ports:
       - "8002:8002"
+    env_file:
+      - .env
     environment:
-      - CLAUDE_API_KEY=${CLAUDE_API_KEY}
       - DATABASE_SERVICE_URL=http://backend-database-service:8001
       - SERVICE_NAME=backend-ai-service
       - SERVICE_PORT=8002
-    # depends_on:
-    #   - backend-database-service
-    #   - redis
     networks:
       - ai-support-network
 

@@ -16,7 +16,7 @@ from s3_storage import S3StorageService
 from s3_handler import S3Handler
 load_dotenv()
 sys.path.append("/app/shared")
-from shared_temp.models.complaint_model import (
+from shared.models.complaint_model import (
     ComplaintModel,
     ExtractedEntities,
     Attachment,
