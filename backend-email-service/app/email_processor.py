@@ -4,7 +4,6 @@ from datetime import datetime
 from typing import Any
 import io
 import logging
-
 import imaplib
 import email
 import aiohttp
@@ -13,23 +12,16 @@ import docx
 import pytesseract
 from PIL import Image
 from dotenv import load_dotenv
-
-
 from s3_storage import S3StorageService
 from s3_handler import S3Handler
-
 load_dotenv()
-
 sys.path.append("/app/shared")
 from shared_temp.models.complaint_model import (
     ComplaintModel,
     ExtractedEntities,
     Attachment,
 )
-
 logger = logging.getLogger(__name__)
-
-
 class EmailProcessor:
     def __init__(self):
         self.ai_service_url = os.getenv("AI_SERVICE_URL")
@@ -41,7 +33,6 @@ class EmailProcessor:
         self.last_processed = None
         self.errors = []
         self.processed_emails = []
-
         self.s3_storage = S3StorageService()
         try:
             self.s3_handler = S3Handler()
@@ -49,25 +40,21 @@ class EmailProcessor:
         except Exception as e:
             logger.error(f"Failed to initialize S3 handler: {e}")
             self.s3_handler = None
-
     async def initialize(self):
         """Initialize email processor"""
         if not self.email_user or not self.email_password:
             logger.warning("Email credentials not provided. Manual processing only.")
         else:
             logger.info("Email processor initialized with IMAP connection")
-
         if self.s3_storage.enabled:
             logger.info("S3 storage is enabled for attachments")
         else:
             logger.warning(
                 "S3 storage is disabled - attachments will be stored without files"
             )
-
     async def get_status(self) -> dict[str, Any]:
         """Get current processing status including S3 info"""
         s3_stats = self.s3_storage.get_storage_stats()
-
         return {
             "status": "running",
             "processed_count": self.processed_count,
@@ -75,7 +62,6 @@ class EmailProcessor:
             "errors": self.errors[-5:],
             "s3_storage": s3_stats,
         }
-
     async def process_new_emails(self) -> None:
         """Process new emails from IMAP server"""
         if not self.email_user or not self.email_password:
@@ -104,7 +90,6 @@ class EmailProcessor:
             error_msg = f"Error connecting to email server: {e}"
             logger.error(error_msg)
             self.errors.append(error_msg)
-
     async def _process_email_from_imap(self, mail, email_id) -> None:
         """Process a single email from IMAP"""
         typ, data = mail.fetch(email_id, "(RFC822)")
@@ -114,9 +99,7 @@ class EmailProcessor:
         subject = email_message["Subject"] or "No Subject"
         received_date = email.utils.parsedate_to_datetime(email_message["Date"])
         content = self._extract_email_content(email_message)
-
         attachments = await self._extract_attachments(email_message)
-
         complaint_id = await self.process_single_email(
             customer_email=customer_email,
             subject=subject,
@@ -124,26 +107,19 @@ class EmailProcessor:
             received_date=received_date,
             attachments=attachments,
         )
-
-        
         await self._update_attachments_with_complaint_id(attachments, complaint_id)
-        
-        
         if any(att.get("s3Url") for att in attachments):
             await self._update_complaint_attachments(complaint_id, attachments)
-
         mail.store(email_id, "+FLAGS", "\\Seen")
         logger.info(
             f"Processed email from {customer_email}, created complaint {complaint_id}"
         )
-        
     async def _update_complaint_attachments(self, complaint_id: str, attachments: list[dict[str, Any]]):
         """Update complaint in database with new attachment URLs"""
         try:
             update_data = {
                 "attachments": attachments
             }
-            
             async with aiohttp.ClientSession() as session:
                 async with session.put(
                     f"{self.database_service_url}/complaints/{complaint_id}",
@@ -153,11 +129,8 @@ class EmailProcessor:
                         logger.info(f"Updated complaint {complaint_id} with new attachment URLs")
                     else:
                         logger.error(f"Failed to update complaint attachments: {response.status}")
-                        
         except Exception as e:
             logger.error(f"Error updating complaint attachments: {e}")
-
-
     def _extract_email_content(self, email_message) -> str:
         """Extract text content from email"""
         content = ""
@@ -169,7 +142,6 @@ class EmailProcessor:
                         content += payload.decode("utf-8", errors="ignore")
                 elif part.get_content_type() == "text/html":
                     import re
-
                     payload = part.get_payload(decode=True)
                     if payload:
                         html_content = payload.decode("utf-8", errors="ignore")
@@ -180,7 +152,6 @@ class EmailProcessor:
             if payload:
                 content = payload.decode("utf-8", errors="ignore")
         return content.strip()
-
     async def _extract_attachments(self, email_message) -> list[dict[str, Any]]:    
         """Extract and process attachments with S3 upload"""
         attachments = []
@@ -191,25 +162,20 @@ class EmailProcessor:
                     if filename:
                         try:
                             file_data = part.get_payload(decode=True)
-                            
                             attachment_info = await self._process_attachment(
                                 filename=filename,
                                 file_data=file_data
-                                
                             )
                             attachments.append(attachment_info)
                         except Exception as e:
                             logger.error(f"Error processing attachment {filename}: {e}")
         return attachments
-
     async def _process_attachment(
         self, filename: str, file_data: bytes
     ) -> dict[str, Any]:
         """Process a single attachment"""
         file_type = filename.split(".")[-1].lower() if "." in filename else "unknown"
         file_size = len(file_data)
-        
-        
         content_type_map = {
             'pdf': 'application/pdf',
             'doc': 'application/msword', 
@@ -221,7 +187,6 @@ class EmailProcessor:
             'txt': 'text/plain'
         }
         content_type = content_type_map.get(file_type, 'application/octet-stream')
-        
         attachment_info = {
             "filename": filename,
             "fileType": file_type,
@@ -230,8 +195,6 @@ class EmailProcessor:
             "extractedText": "",
             "analysisResults": None,
         }
-        
-        
         if self.s3_handler and self.s3_handler.is_configured():
             try:
                 s3_url = self.s3_handler.upload_file(file_data, filename, content_type)
@@ -244,8 +207,6 @@ class EmailProcessor:
                 logger.error(f"Error uploading {filename} to S3: {e}")
         else:
             logger.warning("S3 not configured, skipping file upload")
-        
-        
         try:
             if file_type == "pdf":
                 attachment_info["extractedText"] = self._extract_pdf_text(file_data)
@@ -261,40 +222,32 @@ class EmailProcessor:
                 )
         except Exception as e:
             logger.error(f"Error extracting text from {filename}: {e}")
-        
         return attachment_info
-    
     async def _update_attachments_with_complaint_id(
         self, attachments: list[dict[str, Any]], complaint_id: str
     ):
         """Update S3 attachment paths to include complaint ID"""
         if not self.s3_storage.enabled or not complaint_id:
             return
-
         for attachment in attachments:
             old_s3_url = attachment.get("s3Url")
             if old_s3_url:
                 try:
-
                     file_data = self.s3_storage.download_attachment(old_s3_url)
                     if file_data:
-
                         new_s3_url = self.s3_storage.upload_attachment(
                             file_data=file_data,
                             filename=attachment["filename"],
                             complaint_id=complaint_id,
                         )
                         if new_s3_url:
-
                             self.s3_storage.delete_attachment(old_s3_url)
-
                             attachment["s3Url"] = new_s3_url
                             logger.info(
                                 f"Moved attachment to complaint folder: {new_s3_url}"
                             )
                 except Exception as e:
                     logger.error(f"Error moving attachment to complaint folder: {e}")
-
     def _extract_pdf_text(self, file_data: bytes) -> str:
         """Extract text from PDF"""
         try:
@@ -307,7 +260,6 @@ class EmailProcessor:
         except Exception as e:
             logger.error(f"Error extracting PDF text: {e}")
             return ""
-
     def _extract_docx_text(self, file_data: bytes) -> str:
         """Extract text from DOCX"""
         try:
@@ -320,7 +272,6 @@ class EmailProcessor:
         except Exception as e:
             logger.error(f"Error extracting DOCX text: {e}")
             return ""
-
     async def _extract_image_text(self, file_data: bytes) -> str:
         """Extract text from image using OCR"""
         try:
@@ -330,7 +281,6 @@ class EmailProcessor:
         except Exception as e:
             logger.error(f"Error extracting image text: {e}")
             return ""
-
     async def process_single_email(
         self,
         customer_email: str,
@@ -391,7 +341,6 @@ class EmailProcessor:
             complaint_data = complaint.dict(by_alias=True)
             if "_id" in complaint_data:
                 del complaint_data["_id"]
-
             def convert_datetime_to_string(obj):
                 if isinstance(obj, dict):
                     return {
@@ -404,7 +353,6 @@ class EmailProcessor:
                     return obj.isoformat()
                 else:
                     return obj
-
             complaint_data = convert_datetime_to_string(complaint_data)
             async with aiohttp.ClientSession() as session:
                 async with session.post(
@@ -418,6 +366,12 @@ class EmailProcessor:
                         response_text = await response.text()
                         logger.error(f"Database service error: {response_text}")
                         raise Exception("Database save failed")
+            if await self._should_notify(analysis_data):
+                try:
+                    await self._send_telegram_notification(analysis_data, complaint_id, customer_email, subject)
+                    logger.info(f"Telegram notification sent for complaint {complaint_id}")
+                except Exception as e:
+                    logger.error(f"Failed to send Telegram notification: {e}")
             self.processed_emails.append(
                 {
                     "id": complaint_id,
@@ -436,7 +390,91 @@ class EmailProcessor:
         except Exception as e:
             logger.error(f"Error processing email: {e}")
             raise
-
     async def get_processed_emails(self, limit: int = 50) -> list[dict[str, Any]]:
         """Get list of recently processed emails"""
         return self.processed_emails[-limit:]
+    async def _should_notify(self, analysis_data: dict) -> bool:
+        """Determine if notification should be sent"""
+        should_notify = (
+            analysis_data.get("priority") == "high" or
+            analysis_data.get("escalationLevel", 0) > 1 or
+            analysis_data.get("legalImplications", False) or
+            (analysis_data.get("sentiment") == "negative" and analysis_data.get("confidenceScore", 0) > 0.8)
+        )
+        logger.info(f"Notification check: priority={analysis_data.get('priority')}, "
+                    f"escalation={analysis_data.get('escalationLevel', 0)}, "
+                    f"legal={analysis_data.get('legalImplications', False)}, "
+                    f"sentiment={analysis_data.get('sentiment')}, "
+                    f"confidence={analysis_data.get('confidenceScore', 0)}, "
+                    f"should_notify={should_notify}")
+        return should_notify
+    async def _send_telegram_notification(self, analysis_data: dict, complaint_id: str, customer_email: str, subject: str):
+        """Send Telegram notification for high-priority complaints"""
+        logger.info("Starting Telegram notification process...")
+        token = os.getenv("TELEGRAM_BOT_TOKEN")
+        logger.info(f"🔍 DEBUG: Token exists: {bool(token)}, Token length: {len(token) if token else 0}")
+        if not token:
+            logger.warning("Telegram bot token not configured")
+            return
+        demo_mode = os.getenv("DEMO_MODE", "false").lower() == "true"
+        if demo_mode:
+            chat_id = "@homecredit_test_notification_ch"
+            logger.info(f"Demo mode enabled - sending to public channel: {chat_id}")
+        else:
+            chat_id = os.getenv("TELEGRAM_CHAT_ID")
+            if not chat_id:
+                logger.warning("Telegram chat ID not configured for production mode")
+                return
+            logger.info(f"Production mode - sending to chat: {chat_id}")
+        priority_emoji = {
+            "high": "🚨",
+            "medium": "⚠️", 
+            "low": "ℹ️"
+        }.get(analysis_data.get("priority", "medium"), "ℹ️")
+        sentiment_emoji = {
+            "negative": "😡",
+            "neutral": "😐",
+            "positive": "😊"
+        }.get(analysis_data.get("sentiment", "neutral"), "😐")
+        demo_header = "🎯 *LIVE DEMO* - AI Support System\n\n" if demo_mode else ""
+        message = f"""{demo_header}{priority_emoji} *New {analysis_data.get('priority', 'medium').title()} Priority Complaint*
+        📧 *Customer:* {customer_email}
+        📝 *Subject:* {subject[:50]}{'...' if len(subject) > 50 else ''}
+        ⚡ *Priority:* {analysis_data.get('priority', 'medium').upper()}
+        {sentiment_emoji} *Sentiment:* {analysis_data.get('sentiment', 'neutral').title()}
+        🏷️ *Category:* {analysis_data.get('category', 'other').title()}
+        🎯 *Confidence:* {int(analysis_data.get('confidenceScore', 0) * 100)}%
+        📄 *Preview:* {analysis_data.get('description', '')[:100]}{'...' if len(analysis_data.get('description', '')) > 100 else ''}
+        🔗 [View Details](http://localhost:8080/complaint/{complaint_id})
+        ⏰ *Received:* {datetime.utcnow().strftime('%H:%M %d/%m/%Y')}"""
+        alerts = []
+        if analysis_data.get("legalImplications"):
+            alerts.append("⚖️ *LEGAL IMPLICATIONS DETECTED*")
+        if analysis_data.get("compensationRequired"):
+            alerts.append("💰 *COMPENSATION REQUESTED*")
+        if analysis_data.get("escalationLevel", 0) > 1:
+            alerts.append(f"📈 *ESCALATION LEVEL: {analysis_data.get('escalationLevel')}*")
+        if alerts:
+            message += "\n\n🔴 *ALERTS:*\n" + "\n".join(alerts)
+        url = f"https://api.telegram.org/bot{os.getenv('TELEGRAM_BOT_TOKEN')}/sendMessage"
+        payload = {
+            "chat_id": chat_id,
+            "text": message.strip(),  
+            "parse_mode": "Markdown",
+            "disable_web_page_preview": True
+        }
+        logger.info(f"Sending Telegram notification to {chat_id}")
+        logger.debug(f"Message length: {len(message)} characters")
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.post(url, json=payload) as response:
+                    response_text = await response.text()
+                    if response.status == 200:
+                        logger.info("✅ Telegram notification sent successfully!")
+                        logger.debug(f"Telegram API response: {response_text}")
+                    else:
+                        logger.error(f"❌ Telegram API error {response.status}: {response_text}")
+                        raise Exception(f"Telegram API error {response.status}: {response_text}")
+        except Exception as e:
+            logger.error(f"❌ Failed to send Telegram notification: {e}")
+            raise

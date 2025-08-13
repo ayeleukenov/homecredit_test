@@ -29,6 +29,8 @@ services:
         - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
         - S3_BUCKET_NAME=${S3_BUCKET_NAME}
         - AWS_REGION=${AWS_REGION}
+        - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+        - DEMO_MODE=true
         - SERVICE_NAME=backend-email-service
         - SERVICE_PORT=8003
       networks:
