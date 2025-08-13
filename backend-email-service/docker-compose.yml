@@ -13,7 +13,9 @@ services:
         - ai-support-network
     backend-email-service:
       image: backend-email-service
-      build: .
+      build: 
+        context: ..
+        dockerfile: backend-email-service/Dockerfile
       container_name: backend-email-service
       restart: unless-stopped
       ports:

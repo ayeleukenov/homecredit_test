@@ -12,12 +12,12 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-COPY requirements.txt .
+COPY /backend-email-service/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY app/shared_temp /app/shared
+COPY /shared /app/shared
 
-COPY app/ /app/
+COPY /backend-email-service/app/ /app/
 
 EXPOSE 8003
 

@@ -17,7 +17,9 @@ services:
       - ai-support-network
 
   backend-database-service:
-    build: .
+    build: 
+      context: ..
+      dockerfile: backend-database-service/Dockerfile
     image: backend-database-service
     container_name: backend-database-service
     restart: unless-stopped
