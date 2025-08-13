@@ -30,17 +30,6 @@ Microservices:
 
 ## 🚀 Quick Start
 
-### Tech Stack
-
-- Python
-- FastAPI
-- Docker & Docker Compose
-- MongoDB
-- Redis
-- S3
-- Anthropic API
-- Tesseract OCR
-
 ### Environment Setup
 
 1. Clone the repository into your directory of choice:
@@ -48,7 +37,7 @@ Microservices:
 git clone https://github.com/ayeleukenov/homecredit_test.git
 ```
 
-2. Receive .env files from owned of the repository and put them in the appropriate folders:
+2. Receive .env files from the owner of the repository and put them in the appropriate folders:
 There is one .env files in the root, one specific in the email-service, and one specific in the ai-service folders.
 Claude API Key will be given if asked because it is paid, otherwise please use your own.
 
@@ -130,7 +119,7 @@ Collection of postman requests will be provided alongside the .env files in a zi
 - System capacity: 1000+ emails/hour
 - Threshold for similarity is set to 0.7 
 
-## 🛠️ Technologies Used
+## 🛠️ Technological Stack
 
 ### Backend
 - **Python** - Yep
