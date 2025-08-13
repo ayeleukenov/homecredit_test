@@ -1,5 +1,7 @@
 import os
 import sys
+import json
+import hashlib
 from datetime import datetime
 from typing import Any
 import io
@@ -12,8 +14,10 @@ import docx
 import pytesseract
 from PIL import Image
 from dotenv import load_dotenv
+import redis.asyncio as redis  # Add this import
 from s3_storage import S3StorageService
 from s3_handler import S3Handler
+
 load_dotenv()
 sys.path.append("/app/shared")
 from shared.models.complaint_model import (
@@ -21,7 +25,9 @@ from shared.models.complaint_model import (
     ExtractedEntities,
     Attachment,
 )
+
 logger = logging.getLogger(__name__)
+
 class EmailProcessor:
     def __init__(self):
         self.ai_service_url = os.getenv("AI_SERVICE_URL")
@@ -34,34 +40,112 @@ class EmailProcessor:
         self.errors = []
         self.processed_emails = []
         self.s3_storage = S3StorageService()
+        
+        # Initialize Redis client
+        redis_url = os.getenv("REDIS_URL", "redis://localhost:6379")
+        try:
+            self.redis_client = redis.from_url(redis_url, decode_responses=True)
+            logger.info(f"Redis client initialized: {redis_url}")
+        except Exception as e:
+            logger.error(f"Failed to initialize Redis client: {e}")
+            self.redis_client = None
+        
         try:
             self.s3_handler = S3Handler()
             logger.info(f"S3 Handler initialized. Configured: {self.s3_handler.is_configured()}")
         except Exception as e:
             logger.error(f"Failed to initialize S3 handler: {e}")
             self.s3_handler = None
+
     async def initialize(self):
         """Initialize email processor"""
         if not self.email_user or not self.email_password:
             logger.warning("Email credentials not provided. Manual processing only.")
         else:
             logger.info("Email processor initialized with IMAP connection")
+        
         if self.s3_storage.enabled:
             logger.info("S3 storage is enabled for attachments")
         else:
             logger.warning(
                 "S3 storage is disabled - attachments will be stored without files"
             )
+            
+        # Test Redis connection
+        if self.redis_client:
+            try:
+                await self.redis_client.ping()
+                logger.info("Redis connection successful")
+            except Exception as e:
+                logger.error(f"Redis connection failed: {e}")
+                self.redis_client = None
+
+    def _generate_cache_key(self, customer_email: str, subject: str, content: str) -> str:
+        """Generate cache key from email content"""
+        # Create hash from email content for caching
+        content_string = f"{customer_email}|{subject}|{content}"
+        content_hash = hashlib.md5(content_string.encode('utf-8')).hexdigest()
+        return f"ai_analysis:{content_hash}"
+
+    async def _get_cached_analysis(self, cache_key: str) -> dict | None:
+        """Get cached AI analysis result"""
+        if not self.redis_client:
+            return None
+            
+        try:
+            cached_result = await self.redis_client.get(cache_key)
+            if cached_result:
+                logger.info(f"Cache HIT for key: {cache_key[:20]}...")
+                return json.loads(cached_result)
+            else:
+                logger.info(f"Cache MISS for key: {cache_key[:20]}...")
+                return None
+        except Exception as e:
+            logger.error(f"Error getting cached analysis: {e}")
+            return None
+
+    async def _cache_analysis(self, cache_key: str, analysis_data: dict, ttl: int = 3600):
+        """Cache AI analysis result"""
+        if not self.redis_client:
+            return
+            
+        try:
+            await self.redis_client.setex(
+                cache_key, 
+                ttl,  # Cache for 1 hour by default
+                json.dumps(analysis_data, default=str)  # default=str handles datetime objects
+            )
+            logger.info(f"Cached analysis for key: {cache_key[:20]}...")
+        except Exception as e:
+            logger.error(f"Error caching analysis: {e}")
+
     async def get_status(self) -> dict[str, Any]:
-        """Get current processing status including S3 info"""
+        """Get current processing status including S3 and Redis info"""
         s3_stats = self.s3_storage.get_storage_stats()
+        
+        # Get Redis stats
+        redis_stats = {"enabled": False}
+        if self.redis_client:
+            try:
+                info = await self.redis_client.info()
+                redis_stats = {
+                    "enabled": True,
+                    "connected_clients": info.get("connected_clients", 0),
+                    "used_memory_human": info.get("used_memory_human", "Unknown"),
+                    "total_commands_processed": info.get("total_commands_processed", 0)
+                }
+            except Exception as e:
+                redis_stats = {"enabled": True, "error": str(e)}
+        
         return {
             "status": "running",
             "processed_count": self.processed_count,
             "last_processed": self.last_processed or "Never",
             "errors": self.errors[-5:],
             "s3_storage": s3_stats,
+            "redis_cache": redis_stats,
         }
+
     async def process_new_emails(self) -> None:
         """Process new emails from IMAP server"""
         if not self.email_user or not self.email_password:
@@ -90,6 +174,7 @@ class EmailProcessor:
             error_msg = f"Error connecting to email server: {e}"
             logger.error(error_msg)
             self.errors.append(error_msg)
+
     async def _process_email_from_imap(self, mail, email_id) -> None:
         """Process a single email from IMAP"""
         typ, data = mail.fetch(email_id, "(RFC822)")
@@ -114,6 +199,7 @@ class EmailProcessor:
         logger.info(
             f"Processed email from {customer_email}, created complaint {complaint_id}"
         )
+
     async def _update_complaint_attachments(self, complaint_id: str, attachments: list[dict[str, Any]]):
         """Update complaint in database with new attachment URLs"""
         try:
@@ -131,6 +217,7 @@ class EmailProcessor:
                         logger.error(f"Failed to update complaint attachments: {response.status}")
         except Exception as e:
             logger.error(f"Error updating complaint attachments: {e}")
+
     def _extract_email_content(self, email_message) -> str:
         """Extract text content from email"""
         content = ""
@@ -152,6 +239,7 @@ class EmailProcessor:
             if payload:
                 content = payload.decode("utf-8", errors="ignore")
         return content.strip()
+
     async def _extract_attachments(self, email_message) -> list[dict[str, Any]]:    
         """Extract and process attachments with S3 upload"""
         attachments = []
@@ -170,6 +258,7 @@ class EmailProcessor:
                         except Exception as e:
                             logger.error(f"Error processing attachment {filename}: {e}")
         return attachments
+
     async def _process_attachment(
         self, filename: str, file_data: bytes
     ) -> dict[str, Any]:
@@ -223,6 +312,7 @@ class EmailProcessor:
         except Exception as e:
             logger.error(f"Error extracting text from {filename}: {e}")
         return attachment_info
+
     async def _update_attachments_with_complaint_id(
         self, attachments: list[dict[str, Any]], complaint_id: str
     ):
@@ -248,6 +338,7 @@ class EmailProcessor:
                             )
                 except Exception as e:
                     logger.error(f"Error moving attachment to complaint folder: {e}")
+
     def _extract_pdf_text(self, file_data: bytes) -> str:
         """Extract text from PDF"""
         try:
@@ -260,6 +351,7 @@ class EmailProcessor:
         except Exception as e:
             logger.error(f"Error extracting PDF text: {e}")
             return ""
+
     def _extract_docx_text(self, file_data: bytes) -> str:
         """Extract text from DOCX"""
         try:
@@ -272,15 +364,30 @@ class EmailProcessor:
         except Exception as e:
             logger.error(f"Error extracting DOCX text: {e}")
             return ""
+
     async def _extract_image_text(self, file_data: bytes) -> str:
         """Extract text from image using OCR"""
         try:
             image = Image.open(io.BytesIO(file_data))
-            text = pytesseract.image_to_string(image)
+            logger.info(f"🖼️ Image opened - Size: {image.size}, Mode: {image.mode}")
+            
+            # Try to enhance image for better OCR
+            if image.mode != 'RGB':
+                image = image.convert('RGB')
+            
+            text = pytesseract.image_to_string(image, config='--psm 6')  # Better OCR settings
+            logger.info(f"📝 OCR result length: {len(text)} characters")
+            
+            if text.strip():
+                logger.info(f"📝 OCR extracted: {text[:100]}...")  # First 100 chars
+            else:
+                logger.warning("⚠️ OCR found no text in image")
+            
             return text.strip()
         except Exception as e:
-            logger.error(f"Error extracting image text: {e}")
+            logger.error(f"❌ Error extracting image text: {e}")
             return ""
+        
     async def process_single_email(
         self,
         customer_email: str,
@@ -289,29 +396,60 @@ class EmailProcessor:
         received_date: datetime,
         attachments: list[dict[str, Any]],
     ) -> str:
-        """Process a single email and create complaint"""
+        """Process a single email and create complaint with Redis caching"""
         try:
-            analysis_request = {
-                "customer_email": customer_email,
-                "subject": subject,
-                "content": content,
-                "attachments": attachments,
-                "received_date": received_date.isoformat(),
-            }
-            async with aiohttp.ClientSession() as session:
-                async with session.post(
-                    f"{self.ai_service_url}/analyze", json=analysis_request
-                ) as response:
-                    if response.status == 200:
-                        analysis_result = await response.json()
-                        analysis_data = analysis_result["analysis_results"]
-                    else:
-                        logger.error(f"AI service returned {response.status}")
-                        raise Exception("AI analysis failed")
+            # COMBINE email content with attachment text for better AI analysis
+            full_content = content
+            
+            # Add extracted text from all attachments
+            for attachment in attachments:
+                extracted_text = attachment.get("extractedText", "").strip()
+                if extracted_text:
+                    full_content += f"\n\n--- Attachment: {attachment['filename']} ---\n{extracted_text}"
+            
+            logger.info(f"Combined content length: {len(full_content)} chars, "
+                    f"attachments with text: {sum(1 for att in attachments if att.get('extractedText'))}")
+            
+            # Generate cache key using the FULL content (including attachments)
+            cache_key = self._generate_cache_key(customer_email, subject, full_content)
+            
+            # Try to get cached analysis first
+            cached_analysis = await self._get_cached_analysis(cache_key)
+            
+            if cached_analysis:
+                # Use cached analysis
+                analysis_data = cached_analysis
+                logger.info(f"Using cached AI analysis for email from {customer_email}")
+            else:
+                # No cache hit - call AI service with FULL content
+                analysis_request = {
+                    "customer_email": customer_email,
+                    "subject": subject,
+                    "content": full_content,  # ← CHANGED: Send combined content instead of just email content
+                    "attachments": attachments,  # Still send attachment metadata
+                    "received_date": received_date.isoformat(),
+                }
+                
+                async with aiohttp.ClientSession() as session:
+                    async with session.post(
+                        f"{self.ai_service_url}/analyze", json=analysis_request
+                    ) as response:
+                        if response.status == 200:
+                            analysis_result = await response.json()
+                            analysis_data = analysis_result["analysis_results"]
+                            
+                            # Cache the analysis result
+                            await self._cache_analysis(cache_key, analysis_data)
+                            logger.info(f"Called AI service and cached result for {customer_email}")
+                        else:
+                            logger.error(f"AI service returned {response.status}")
+                            raise Exception("AI analysis failed")
+
             complaint = ComplaintModel(
                 customerEmail=customer_email,
                 subject=subject,
-                description=analysis_data.get("description", f"{subject}\n\n{content}"),
+                # description=analysis_data.get("description") or f"{subject}\n\n{content}",
+                description=f"{subject}\n\n{full_content}",
                 category=analysis_data.get("category", "other"),
                 subcategory=analysis_data.get("subcategory"),
                 priority=analysis_data.get("priority", "medium"),
@@ -338,9 +476,11 @@ class EmailProcessor:
                 status=analysis_data.get("status", "new"),
                 processingHistory=analysis_data.get("processingHistory", []),
             )
+            
             complaint_data = complaint.dict(by_alias=True)
             if "_id" in complaint_data:
                 del complaint_data["_id"]
+            
             def convert_datetime_to_string(obj):
                 if isinstance(obj, dict):
                     return {
@@ -353,7 +493,9 @@ class EmailProcessor:
                     return obj.isoformat()
                 else:
                     return obj
+            
             complaint_data = convert_datetime_to_string(complaint_data)
+            
             async with aiohttp.ClientSession() as session:
                 async with session.post(
                     f"{self.database_service_url}/complaints", json=complaint_data
@@ -366,12 +508,14 @@ class EmailProcessor:
                         response_text = await response.text()
                         logger.error(f"Database service error: {response_text}")
                         raise Exception("Database save failed")
+            
             if await self._should_notify(analysis_data):
                 try:
                     await self._send_telegram_notification(analysis_data, complaint_id, customer_email, subject)
                     logger.info(f"Telegram notification sent for complaint {complaint_id}")
                 except Exception as e:
                     logger.error(f"Failed to send Telegram notification: {e}")
+            
             self.processed_emails.append(
                 {
                     "id": complaint_id,
@@ -382,17 +526,23 @@ class EmailProcessor:
                     "priority": analysis_data.get("priority"),
                     "attachments_count": len(attachments),
                     "s3_attachments": sum(1 for att in attachments if att.get("s3Url")),
+                    "cached_analysis": cached_analysis is not None,
+                    "attachment_text_processed": sum(1 for att in attachments if att.get("extractedText")),  # Track this
                 }
             )
+            
             if len(self.processed_emails) > 100:
                 self.processed_emails = self.processed_emails[-100:]
+            
             return complaint_id
         except Exception as e:
             logger.error(f"Error processing email: {e}")
             raise
+        
     async def get_processed_emails(self, limit: int = 50) -> list[dict[str, Any]]:
         """Get list of recently processed emails"""
         return self.processed_emails[-limit:]
+
     async def _should_notify(self, analysis_data: dict) -> bool:
         """Determine if notification should be sent"""
         should_notify = (
@@ -408,6 +558,7 @@ class EmailProcessor:
                     f"confidence={analysis_data.get('confidenceScore', 0)}, "
                     f"should_notify={should_notify}")
         return should_notify
+
     async def _send_telegram_notification(self, analysis_data: dict, complaint_id: str, customer_email: str, subject: str):
         """Send Telegram notification for high-priority complaints"""
         logger.info("Starting Telegram notification process...")
@@ -478,3 +629,4 @@ class EmailProcessor:
         except Exception as e:
             logger.error(f"❌ Failed to send Telegram notification: {e}")
             raise
+        

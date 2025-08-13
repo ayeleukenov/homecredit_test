@@ -161,7 +161,7 @@ Return ONLY the JSON object, no other text.
             "subject": subject,
             "receivedDate": datetime.utcnow().isoformat(),
             "assignedTo": department_mapping.get(category, "customer_service"),
-            "description": f"{subject}\n\n{content}"[:1000],
+            # "description": f"{subject}\n\n{content}"[:1000],
             "source": "email",
             "status": "new",
             "lastUpdated": datetime.utcnow().isoformat(),
