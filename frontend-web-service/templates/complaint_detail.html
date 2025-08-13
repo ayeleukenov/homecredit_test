@@ -506,6 +506,111 @@
         .preview-toggle:hover {
             background: #2980b9;
         }
+        .attachment-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .attachment-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .download-btn {
+            background: linear-gradient(135deg, #27ae60, #2ecc71);
+            color: white;
+            padding: 6px 12px;
+            border: none;
+            border-radius: 4px;
+            text-decoration: none;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .download-btn:hover {
+            background: linear-gradient(135deg, #219a52, #27ae60);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 8px rgba(39, 174, 96, 0.3);
+        }
+
+        .info-btn {
+            background: linear-gradient(135deg, #3498db, #2980b9);
+            color: white;
+            padding: 6px 12px;
+            border: none;
+            border-radius: 4px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .info-btn:hover {
+            background: linear-gradient(135deg, #2980b9, #21618c);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 8px rgba(52, 152, 219, 0.3);
+        }
+
+        .unavailable-btn {
+            background: #95a5a6;
+            color: white;
+            padding: 6px 12px;
+            border-radius: 4px;
+            font-size: 12px;
+            cursor: not-allowed;
+            opacity: 0.7;
+        }
+
+        .attachment-details {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 15px;
+            margin-top: 10px;
+            transition: all 0.3s ease;
+        }
+
+        .details-loading {
+            text-align: center;
+            color: #666;
+            font-style: italic;
+        }
+
+        .attachment-detail-item {
+            margin: 8px 0;
+            padding: 5px 0;
+            border-bottom: 1px solid #eee;
+        }
+
+        .attachment-detail-item:last-child {
+            border-bottom: none;
+        }
+
+        .detail-label {
+            font-weight: bold;
+            color: #2c3e50;
+            display: inline-block;
+            min-width: 120px;
+        }
+
+        .detail-value {
+            color: #555;
+        }
+
+        .extracted-text {
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 10px;
+            max-height: 200px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            white-space: pre-wrap;
+            margin-top: 10px;
+        }
     </style>
 </head>
 
@@ -742,69 +847,109 @@
         </div>
         {% if complaint.attachments %}
         <div class="detail-section">
-            <div class="section-header">📎 Attachments</div>
-            <div class="section-content">
-                <ul class="attachments-list">
-                    {% for attachment in complaint.attachments %}
-                    <li class="attachment-item">
-                        <div class="attachment-header">
-                            <div class="attachment-name">
-                                📄 {{ attachment.filename }}
-                                {% if attachment.s3Url %}
-                                <span class="s3-status s3-available">☁️ Available</span>
-                                {% else %}
-                                <span class="s3-status s3-unavailable">❌ No File</span>
-                                {% endif %}
-                            </div>
-                        </div>
-                        <div class="attachment-info">
-                            Type: {{ attachment.fileType.upper() }} |
-                            Size: {{ (attachment.fileSize / 1024)|round(1) }} KB
-                            {% if attachment.s3Url %}
-                            | Stored in S3
-                            {% endif %}
-                        </div>
+        <div class="section-header">📎 Attachments</div>
+        <div class="section-content">
+            <ul class="attachments-list">
+                {% for attachment in complaint.attachments %}
+                <li class="attachment-item">
+                    <div class="attachment-header">
+                        <div class="attachment-name">📄 {{ attachment.filename }}</div>
                         <div class="attachment-actions">
                             {% if attachment.s3Url %}
-                            <a href="/download-attachment/{{ complaint._id }}/{{ attachment.filename }}"
-                                class="download-btn" download="{{ attachment.filename }}">
-                                📥 Download File
+                            <a href="/api/download/{{ complaint._id }}/{{ loop.index0 }}" 
+                            class="download-btn" 
+                            target="_blank"
+                            title="Download file">
+                                💾 Download
                             </a>
-                            {% if attachment.fileType.lower() in ['jpg', 'jpeg', 'png', 'gif', 'bmp'] %}
-                            <button class="preview-toggle"
-                                onclick="toggleImagePreview('{{ loop.index0 }}', '{{ attachment.s3Url }}')">
-                                🖼️ Preview Image
+                            <button onclick="viewAttachmentInfo('{{ complaint._id }}', {{ loop.index0 }})" 
+                                    class="info-btn"
+                                    title="View details">
+                                ℹ️ Info
                             </button>
-                            {% endif %}
                             {% else %}
-                            <span class="download-btn disabled">📥 File Not Available</span>
-                            {% endif %}
-                            {% if attachment.extractedText %}
-                            <button class="preview-toggle" onclick="toggleTextPreview('{{ loop.index0 }}')">
-                                📝 View Extracted Text
-                            </button>
+                            <span class="unavailable-btn" title="File not available for download">
+                                ❌ Unavailable
+                            </span>
                             {% endif %}
                         </div>
-                        {% if attachment.fileType.lower() in ['jpg', 'jpeg', 'png', 'gif', 'bmp'] %}
-                        <div id="image-preview-{{ loop.index0 }}" class="image-preview" style="display: none;">
-                            <img id="preview-img-{{ loop.index0 }}" src="" alt="Attachment preview"
-                                style="max-width: 100%; max-height: 400px; border: 1px solid #ddd; border-radius: 4px; margin-top: 10px;">
-                        </div>
-                        {% endif %}
+                    </div>
+                    <div class="attachment-info">
+                        Type: {{ attachment.fileType.upper() }} | 
+                        Size: {{ (attachment.fileSize / 1024)|round(1) }} KB
                         {% if attachment.extractedText %}
-                        <div id="text-preview-{{ loop.index0 }}" class="attachment-preview" style="display: none;">
-                            <strong>Extracted Text:</strong><br>
-                            {{ attachment.extractedText[:1000] }}
-                            {% if attachment.extractedText|length > 1000 %}
-                            <br><em>... (showing first 1000 characters, download file for complete content)</em>
-                            {% endif %}
-                        </div>
+                        | Text extracted: {{ attachment.extractedText[:100] }}...
                         {% endif %}
-                    </li>
-                    {% endfor %}
-                </ul>
-            </div>
+                    </div>
+                    
+                    <!-- Collapsible details section -->
+                    <div id="attachment-details-{{ loop.index0 }}" class="attachment-details" style="display: none;">
+                        <div class="details-loading">Loading attachment details...</div>
+                    </div>
+                </li>
+                {% endfor %}
+            </ul>
         </div>
+    </div>
+    <script>
+        async function viewAttachmentInfo(complaintId, attachmentIndex) {
+            const detailsDiv = document.getElementById(`attachment-details-${attachmentIndex}`);
+            if (detailsDiv.style.display === 'none') {
+                detailsDiv.style.display = 'block';
+                if (detailsDiv.dataset.loaded !== 'true') {
+                    try {
+                        const response = await fetch(`/api/attachment-info/${complaintId}/${attachmentIndex}`);
+                        if (response.ok) {
+                            const data = await response.json();
+                            
+                            detailsDiv.innerHTML = `
+                                <div class="attachment-detail-item">
+                                    <span class="detail-label">Filename:</span>
+                                    <span class="detail-value">${data.filename}</span>
+                                </div>
+                                <div class="attachment-detail-item">
+                                    <span class="detail-label">File Type:</span>
+                                    <span class="detail-value">${data.fileType.toUpperCase()}</span>
+                                </div>
+                                <div class="attachment-detail-item">
+                                    <span class="detail-label">File Size:</span>
+                                    <span class="detail-value">${(data.fileSize / 1024).toFixed(1)} KB</span>
+                                </div>
+                                <div class="attachment-detail-item">
+                                    <span class="detail-label">Download Available:</span>
+                                    <span class="detail-value">${data.hasS3Url ? '✅ Yes' : '❌ No'}</span>
+                                </div>
+                                ${data.extractedText ? `
+                                <div class="attachment-detail-item">
+                                    <span class="detail-label">Extracted Text:</span>
+                                    <div class="extracted-text">${data.extractedText}</div>
+                                </div>
+                                ` : ''}
+                            `;
+                            
+                            detailsDiv.dataset.loaded = 'true';
+                        } else {
+                            detailsDiv.innerHTML = '<div style="color: #e74c3c;">Failed to load attachment details</div>';
+                        }
+                    } catch (error) {
+                        detailsDiv.innerHTML = '<div style="color: #e74c3c;">Error loading attachment details</div>';
+                        console.error('Error loading attachment info:', error);
+                    }
+                }
+            } else {
+                detailsDiv.style.display = 'none';
+            }
+        }
+        document.addEventListener('click', function(event) {
+            if (!event.target.closest('.attachment-item')) {
+                document.querySelectorAll('.attachment-details').forEach(details => {
+                    if (details.style.display === 'block') {
+                        details.style.display = 'none';
+                    }
+                });
+            }
+        });
+        </script>
         {% endif %}
     </div>
     <script>

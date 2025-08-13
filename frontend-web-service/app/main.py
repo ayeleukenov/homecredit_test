@@ -5,11 +5,13 @@ import io
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
-from fastapi.responses import StreamingResponse
 import aiohttp
 from dotenv import load_dotenv
+
+from s3_handler import S3Handler
+s3_handler = S3Handler()
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO)
@@ -172,56 +174,82 @@ async def get_stats():
         raise HTTPException(status_code=500, detail=str(e))
     
     
-@app.get("/download-attachment/{complaint_id}/{filename}")
-async def download_attachment(complaint_id: str, filename: str):
-    """Download attachment from S3 via email service"""
+@app.get("/api/download/{complaint_id}/{attachment_index}")
+async def download_attachment(complaint_id: str, attachment_index: int):
+    """Generate download link for attachment"""
     try:
-        # Get complaint details to find the S3 URL
+        # Get complaint details
         async with aiohttp.ClientSession() as session:
-            async with session.get(f"{DATABASE_SERVICE_URL}/complaints/{complaint_id}") as response:
-                if response.status != 200:
+            async with session.get(
+                f"{DATABASE_SERVICE_URL}/complaints/{complaint_id}"
+            ) as response:
+                if response.status == 200:
+                    complaint = await response.json()
+                elif response.status == 404:
                     raise HTTPException(status_code=404, detail="Complaint not found")
-                
-                complaint = await response.json()
-                
-                # Find the attachment by filename
-                attachment = None
-                for att in complaint.get('attachments', []):
-                    if att['filename'] == filename:
-                        attachment = att
-                        break
-                
-                if not attachment or not attachment.get('s3Url'):
-                    raise HTTPException(status_code=404, detail="Attachment not found")
-                
-                # Get the S3 key from the URL
-                s3_url = attachment['s3Url']
-                # Extract the key part after the domain
-                if '.amazonaws.com/' in s3_url:
-                    s3_key = s3_url.split('.amazonaws.com/')[-1]
                 else:
-                    raise HTTPException(status_code=400, detail="Invalid S3 URL format")
-                
-                # Download through the email service
-                email_service_url = os.getenv("EMAIL_SERVICE_URL", "http://backend-email-service:8003")
-                async with session.get(f"{email_service_url}/attachment/{s3_key}") as download_response:
-                    if download_response.status != 200:
-                        raise HTTPException(status_code=404, detail="File not found in storage")
-                    
-                    content = await download_response.read()
-                    content_type = download_response.headers.get('content-type', 'application/octet-stream')
-                    
-                    return StreamingResponse(
-                        io.BytesIO(content),
-                        media_type=content_type,
-                        headers={"Content-Disposition": f"attachment; filename={filename}"}
-                    )
-                    
+                    raise Exception("Database service error")
+        
+        # Check if attachment exists
+        if attachment_index >= len(complaint.get("attachments", [])):
+            raise HTTPException(status_code=404, detail="Attachment not found")
+        
+        attachment = complaint["attachments"][attachment_index]
+        s3_url = attachment.get("s3Url")
+        
+        if not s3_url:
+            raise HTTPException(status_code=404, detail="File not available for download")
+        
+        # Generate presigned URL for download
+        if s3_handler.is_configured():
+            download_url = s3_handler.generate_presigned_url(s3_url, expiration=300)  # 5 minutes
+            if download_url:
+                return RedirectResponse(url=download_url)
+            else:
+                raise HTTPException(status_code=500, detail="Failed to generate download link")
+        else:
+            # Fallback: direct S3 URL (only if bucket is public)
+            return RedirectResponse(url=s3_url)
+            
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error downloading attachment: {e}")
-        raise HTTPException(status_code=500, detail=f"Download failed: {str(e)}")
+        logger.error(f"Error generating download link: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/attachment-info/{complaint_id}/{attachment_index}")
+async def get_attachment_info(complaint_id: str, attachment_index: int):
+    """Get attachment metadata without downloading"""
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(
+                f"{DATABASE_SERVICE_URL}/complaints/{complaint_id}"
+            ) as response:
+                if response.status == 200:
+                    complaint = await response.json()
+                elif response.status == 404:
+                    raise HTTPException(status_code=404, detail="Complaint not found")
+                else:
+                    raise Exception("Database service error")
+        
+        if attachment_index >= len(complaint.get("attachments", [])):
+            raise HTTPException(status_code=404, detail="Attachment not found")
+        
+        attachment = complaint["attachments"][attachment_index]
+        
+        return {
+            "filename": attachment.get("filename"),
+            "fileType": attachment.get("fileType"), 
+            "fileSize": attachment.get("fileSize"),
+            "hasS3Url": bool(attachment.get("s3Url")),
+            "extractedText": attachment.get("extractedText", "")[:500] + "..." if len(attachment.get("extractedText", "")) > 500 else attachment.get("extractedText", "")
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting attachment info: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 if __name__ == "__main__":

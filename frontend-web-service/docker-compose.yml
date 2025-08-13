@@ -7,8 +7,13 @@ services:
     ports:
       - "8080:8080"
     environment:
+      - AI_SERVICE_URL=${AI_SERVICE_URL}
       - EMAIL_SERVICE_URL=${EMAIL_SERVICE_URL}
       - DATABASE_SERVICE_URL=${DATABASE_SERVICE_URL}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_REGION=${AWS_REGION}
+      - S3_BUCKET_NAME=${S3_BUCKET_NAME}
       - SERVICE_NAME=frontend-web-service
       - SERVICE_PORT=8080
     networks:

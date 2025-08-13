@@ -16,6 +16,7 @@ from dotenv import load_dotenv
 
 
 from s3_storage import S3StorageService
+from s3_handler import S3Handler
 
 load_dotenv()
 
@@ -42,6 +43,12 @@ class EmailProcessor:
         self.processed_emails = []
 
         self.s3_storage = S3StorageService()
+        try:
+            self.s3_handler = S3Handler()
+            logger.info(f"S3 Handler initialized. Configured: {self.s3_handler.is_configured()}")
+        except Exception as e:
+            logger.error(f"Failed to initialize S3 handler: {e}")
+            self.s3_handler = None
 
     async def initialize(self):
         """Initialize email processor"""
@@ -118,12 +125,38 @@ class EmailProcessor:
             attachments=attachments,
         )
 
+        
         await self._update_attachments_with_complaint_id(attachments, complaint_id)
+        
+        
+        if any(att.get("s3Url") for att in attachments):
+            await self._update_complaint_attachments(complaint_id, attachments)
 
         mail.store(email_id, "+FLAGS", "\\Seen")
         logger.info(
             f"Processed email from {customer_email}, created complaint {complaint_id}"
         )
+        
+    async def _update_complaint_attachments(self, complaint_id: str, attachments: list[dict[str, Any]]):
+        """Update complaint in database with new attachment URLs"""
+        try:
+            update_data = {
+                "attachments": attachments
+            }
+            
+            async with aiohttp.ClientSession() as session:
+                async with session.put(
+                    f"{self.database_service_url}/complaints/{complaint_id}",
+                    json=update_data
+                ) as response:
+                    if response.status == 200:
+                        logger.info(f"Updated complaint {complaint_id} with new attachment URLs")
+                    else:
+                        logger.error(f"Failed to update complaint attachments: {response.status}")
+                        
+        except Exception as e:
+            logger.error(f"Error updating complaint attachments: {e}")
+
 
     def _extract_email_content(self, email_message) -> str:
         """Extract text content from email"""
@@ -148,7 +181,7 @@ class EmailProcessor:
                 content = payload.decode("utf-8", errors="ignore")
         return content.strip()
 
-    async def _extract_attachments(self, email_message) -> list[dict[str, Any]]:
+    async def _extract_attachments(self, email_message) -> list[dict[str, Any]]:    
         """Extract and process attachments with S3 upload"""
         attachments = []
         if email_message.is_multipart():
@@ -158,10 +191,11 @@ class EmailProcessor:
                     if filename:
                         try:
                             file_data = part.get_payload(decode=True)
+                            
                             attachment_info = await self._process_attachment(
                                 filename=filename,
-                                file_data=file_data,
-                                content_type=part.get_content_type(),
+                                file_data=file_data
+                                
                             )
                             attachments.append(attachment_info)
                         except Exception as e:
@@ -169,12 +203,25 @@ class EmailProcessor:
         return attachments
 
     async def _process_attachment(
-        self, filename: str, file_data: bytes, content_type: str = None
+        self, filename: str, file_data: bytes
     ) -> dict[str, Any]:
-        """Process a single attachment with S3 upload"""
+        """Process a single attachment"""
         file_type = filename.split(".")[-1].lower() if "." in filename else "unknown"
         file_size = len(file_data)
-
+        
+        
+        content_type_map = {
+            'pdf': 'application/pdf',
+            'doc': 'application/msword', 
+            'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'jpg': 'image/jpeg',
+            'jpeg': 'image/jpeg',
+            'png': 'image/png',
+            'gif': 'image/gif',
+            'txt': 'text/plain'
+        }
+        content_type = content_type_map.get(file_type, 'application/octet-stream')
+        
         attachment_info = {
             "filename": filename,
             "fileType": file_type,
@@ -183,21 +230,22 @@ class EmailProcessor:
             "extractedText": "",
             "analysisResults": None,
         }
-
-        try:
-            s3_url = self.s3_storage.upload_attachment(
-                file_data=file_data, filename=filename, content_type=content_type
-            )
-            if s3_url:
-                attachment_info["s3Url"] = s3_url
-                logger.info(f"Uploaded {filename} to S3: {s3_url}")
-            else:
-                logger.warning(
-                    f"Failed to upload {filename} to S3, continuing without file storage"
-                )
-        except Exception as e:
-            logger.error(f"Error uploading {filename} to S3: {e}")
-
+        
+        
+        if self.s3_handler and self.s3_handler.is_configured():
+            try:
+                s3_url = self.s3_handler.upload_file(file_data, filename, content_type)
+                if s3_url:
+                    attachment_info["s3Url"] = s3_url
+                    logger.info(f"Uploaded {filename} to S3: {s3_url}")
+                else:
+                    logger.warning(f"Failed to upload {filename} to S3")
+            except Exception as e:
+                logger.error(f"Error uploading {filename} to S3: {e}")
+        else:
+            logger.warning("S3 not configured, skipping file upload")
+        
+        
         try:
             if file_type == "pdf":
                 attachment_info["extractedText"] = self._extract_pdf_text(file_data)
@@ -213,9 +261,9 @@ class EmailProcessor:
                 )
         except Exception as e:
             logger.error(f"Error extracting text from {filename}: {e}")
-
+        
         return attachment_info
-
+    
     async def _update_attachments_with_complaint_id(
         self, attachments: list[dict[str, Any]], complaint_id: str
     ):
