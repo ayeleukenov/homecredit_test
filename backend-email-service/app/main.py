@@ -2,11 +2,14 @@ import os
 import logging
 import asyncio
 from datetime import datetime
+import io
 
 from fastapi import FastAPI, HTTPException, status, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from email_processor import EmailProcessor
+from fastapi.responses import StreamingResponse
+from s3_storage import S3StorageService
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -18,7 +21,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 email_processor = EmailProcessor()
+s3_storage = S3StorageService()
 
 
 class EmailProcessingStatus(BaseModel):
@@ -120,6 +125,82 @@ async def get_processed_emails(limit: int = 50):
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to get processed emails: {str(e)}",
+        )
+
+
+@app.get("/attachment/{attachment_path:path}")
+async def download_attachment_from_s3(attachment_path: str):
+    """Download attachment directly from S3 (used by frontend service)"""
+    try:
+
+        bucket_name = s3_storage.bucket_name
+        region = s3_storage.region
+        s3_url = f"https://{bucket_name}.s3.{region}.amazonaws.com/{attachment_path}"
+
+        file_data = s3_storage.download_attachment(s3_url)
+        if not file_data:
+            raise HTTPException(status_code=404, detail="Attachment not found in S3")
+
+        filename = attachment_path.split("/")[-1]
+
+        content_type = (
+            s3_storage._get_content_type(filename) or "application/octet-stream"
+        )
+
+        logger.info(f"Successfully downloaded {filename} from S3")
+
+        return StreamingResponse(
+            io.BytesIO(file_data),
+            media_type=content_type,
+            headers={"Content-Disposition": f"attachment; filename={filename}"},
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error downloading attachment from S3: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to download attachment: {str(e)}",
+        )
+
+
+@app.get("/s3-stats")
+async def get_s3_statistics():
+    """Get S3 storage statistics"""
+    try:
+        stats = s3_storage.get_storage_stats()
+        return stats
+    except Exception as e:
+        logger.error(f"Error getting S3 stats: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get S3 stats: {str(e)}",
+        )
+
+
+@app.delete("/attachment/{attachment_path:path}")
+async def delete_attachment_from_s3(attachment_path: str):
+    """Delete attachment from S3"""
+    try:
+
+        bucket_name = s3_storage.bucket_name
+        region = s3_storage.region
+        s3_url = f"https://{bucket_name}.s3.{region}.amazonaws.com/{attachment_path}"
+
+        success = s3_storage.delete_attachment(s3_url)
+        if not success:
+            raise HTTPException(status_code=404, detail="Attachment not found")
+
+        return {"message": "Attachment deleted successfully"}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting attachment: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to delete attachment: {str(e)}",
         )
 
 

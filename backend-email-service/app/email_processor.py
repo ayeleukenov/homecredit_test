@@ -14,6 +14,9 @@ import pytesseract
 from PIL import Image
 from dotenv import load_dotenv
 
+
+from s3_storage import S3StorageService
+
 load_dotenv()
 
 sys.path.append("/app/shared")
@@ -38,6 +41,8 @@ class EmailProcessor:
         self.errors = []
         self.processed_emails = []
 
+        self.s3_storage = S3StorageService()
+
     async def initialize(self):
         """Initialize email processor"""
         if not self.email_user or not self.email_password:
@@ -45,13 +50,23 @@ class EmailProcessor:
         else:
             logger.info("Email processor initialized with IMAP connection")
 
+        if self.s3_storage.enabled:
+            logger.info("S3 storage is enabled for attachments")
+        else:
+            logger.warning(
+                "S3 storage is disabled - attachments will be stored without files"
+            )
+
     async def get_status(self) -> dict[str, Any]:
-        """Get current processing status"""
+        """Get current processing status including S3 info"""
+        s3_stats = self.s3_storage.get_storage_stats()
+
         return {
             "status": "running",
             "processed_count": self.processed_count,
             "last_processed": self.last_processed or "Never",
             "errors": self.errors[-5:],
+            "s3_storage": s3_stats,
         }
 
     async def process_new_emails(self) -> None:
@@ -92,7 +107,9 @@ class EmailProcessor:
         subject = email_message["Subject"] or "No Subject"
         received_date = email.utils.parsedate_to_datetime(email_message["Date"])
         content = self._extract_email_content(email_message)
+
         attachments = await self._extract_attachments(email_message)
+
         complaint_id = await self.process_single_email(
             customer_email=customer_email,
             subject=subject,
@@ -100,6 +117,9 @@ class EmailProcessor:
             received_date=received_date,
             attachments=attachments,
         )
+
+        await self._update_attachments_with_complaint_id(attachments, complaint_id)
+
         mail.store(email_id, "+FLAGS", "\\Seen")
         logger.info(
             f"Processed email from {customer_email}, created complaint {complaint_id}"
@@ -129,7 +149,7 @@ class EmailProcessor:
         return content.strip()
 
     async def _extract_attachments(self, email_message) -> list[dict[str, Any]]:
-        """Extract and process attachments"""
+        """Extract and process attachments with S3 upload"""
         attachments = []
         if email_message.is_multipart():
             for part in email_message.walk():
@@ -139,7 +159,9 @@ class EmailProcessor:
                         try:
                             file_data = part.get_payload(decode=True)
                             attachment_info = await self._process_attachment(
-                                filename=filename, file_data=file_data
+                                filename=filename,
+                                file_data=file_data,
+                                content_type=part.get_content_type(),
                             )
                             attachments.append(attachment_info)
                         except Exception as e:
@@ -147,11 +169,12 @@ class EmailProcessor:
         return attachments
 
     async def _process_attachment(
-        self, filename: str, file_data: bytes
+        self, filename: str, file_data: bytes, content_type: str = None
     ) -> dict[str, Any]:
-        """Process a single attachment"""
+        """Process a single attachment with S3 upload"""
         file_type = filename.split(".")[-1].lower() if "." in filename else "unknown"
         file_size = len(file_data)
+
         attachment_info = {
             "filename": filename,
             "fileType": file_type,
@@ -160,6 +183,21 @@ class EmailProcessor:
             "extractedText": "",
             "analysisResults": None,
         }
+
+        try:
+            s3_url = self.s3_storage.upload_attachment(
+                file_data=file_data, filename=filename, content_type=content_type
+            )
+            if s3_url:
+                attachment_info["s3Url"] = s3_url
+                logger.info(f"Uploaded {filename} to S3: {s3_url}")
+            else:
+                logger.warning(
+                    f"Failed to upload {filename} to S3, continuing without file storage"
+                )
+        except Exception as e:
+            logger.error(f"Error uploading {filename} to S3: {e}")
+
         try:
             if file_type == "pdf":
                 attachment_info["extractedText"] = self._extract_pdf_text(file_data)
@@ -175,7 +213,39 @@ class EmailProcessor:
                 )
         except Exception as e:
             logger.error(f"Error extracting text from {filename}: {e}")
+
         return attachment_info
+
+    async def _update_attachments_with_complaint_id(
+        self, attachments: list[dict[str, Any]], complaint_id: str
+    ):
+        """Update S3 attachment paths to include complaint ID"""
+        if not self.s3_storage.enabled or not complaint_id:
+            return
+
+        for attachment in attachments:
+            old_s3_url = attachment.get("s3Url")
+            if old_s3_url:
+                try:
+
+                    file_data = self.s3_storage.download_attachment(old_s3_url)
+                    if file_data:
+
+                        new_s3_url = self.s3_storage.upload_attachment(
+                            file_data=file_data,
+                            filename=attachment["filename"],
+                            complaint_id=complaint_id,
+                        )
+                        if new_s3_url:
+
+                            self.s3_storage.delete_attachment(old_s3_url)
+
+                            attachment["s3Url"] = new_s3_url
+                            logger.info(
+                                f"Moved attachment to complaint folder: {new_s3_url}"
+                            )
+                except Exception as e:
+                    logger.error(f"Error moving attachment to complaint folder: {e}")
 
     def _extract_pdf_text(self, file_data: bytes) -> str:
         """Extract text from PDF"""
@@ -308,6 +378,8 @@ class EmailProcessor:
                     "processed_at": datetime.utcnow().isoformat(),
                     "category": analysis_data.get("category"),
                     "priority": analysis_data.get("priority"),
+                    "attachments_count": len(attachments),
+                    "s3_attachments": sum(1 for att in attachments if att.get("s3Url")),
                 }
             )
             if len(self.processed_emails) > 100:
