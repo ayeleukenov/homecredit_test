@@ -127,7 +127,7 @@ Return ONLY the JSON object, no other text.
             json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
             if json_match:
                 json_str = json_match.group(0)
-                logger.info(f"Extracted JSON: {repr(json_str)}")  # Debug line
+                logger.info(f"Extracted JSON: {repr(json_str)}")
                 return json.loads(json_str)
             else:
                 raise ValueError("No JSON found in response")
@@ -135,7 +135,7 @@ Return ONLY the JSON object, no other text.
         except (json.JSONDecodeError, ValueError) as e:
             logger.error(f"Failed to parse Claude response: {e}")
             logger.error(f"Response text: {response_text}")
-            logger.error(f"Character at error position: {repr(response_text[440:450])}")  # Show problem area
+            logger.error(f"Character at error position: {repr(response_text[440:450])}")
             raise
 
     def _generate_derived_fields(
@@ -161,7 +161,7 @@ Return ONLY the JSON object, no other text.
             "subject": subject,
             "receivedDate": datetime.utcnow().isoformat(),
             "assignedTo": department_mapping.get(category, "customer_service"),
-            # "description": f"{subject}\n\n{content}"[:1000],
+            "description": analysis.get("summary", content[:1000]) if "summary" in analysis else content[:1000],
             "source": "email",
             "status": "new",
             "lastUpdated": datetime.utcnow().isoformat(),
@@ -259,7 +259,7 @@ File Type: {file_type}
 Content: {extracted_text[:2000]}
 Return JSON with:
 {{
-  "summary": "brief summary of content",
+  "summary": "concise summary of the complaint without repetition",
   "relevantInfo": ["key", "points", "extracted"],
   "containsPersonalInfo": true/false,
   "documentType": "invoice|receipt|contract|image|other",
