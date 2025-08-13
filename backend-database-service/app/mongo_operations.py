@@ -4,6 +4,7 @@ from typing import Any
 from datetime import datetime
 from motor.motor_asyncio import AsyncIOMotorClient
 from bson import ObjectId
+from duplicate_checker import DuplicateChecker
 import sys
 
 sys.path.append("/app/shared")
@@ -20,6 +21,13 @@ class MongoOperations:
         self.mongodb_url = os.getenv(
             "MONGODB_URL",
             "mongodb://admin:password123@mongodb:27017/ai_support?authSource=admin",
+        )
+        similarity_threshold = float(
+            os.getenv("DUPLICATE_SIMILARITY_THRESHOLD", "0.85")
+        )
+        time_window_days = int(os.getenv("DUPLICATE_TIME_WINDOW_DAYS", "7"))
+        self.duplicate_checker = DuplicateChecker(
+            similarity_threshold, time_window_days
         )
 
     async def connect(self):
@@ -53,29 +61,139 @@ class MongoOperations:
             await self.complaints_collection.create_index(
                 [("status", 1), ("priority", -1), ("createdDate", -1)]
             )
+            await self.complaints_collection.create_index("contentHash")
+            await self.complaints_collection.create_index("isDuplicate")
+            await self.complaints_collection.create_index("originalComplaintId")
+            await self.complaints_collection.create_index(
+                [("customerEmail", 1), ("category", 1), ("createdDate", -1)]
+            )
             logger.info("Database indexes created successfully")
         except Exception as e:
             logger.error(f"Failed to create indexes: {e}")
 
     async def create_complaint(self, complaint: ComplaintModel) -> str:
-        """Create a new complaint in the database"""
+        """Create a new complaint in the database with duplicate checking"""
         try:
             complaint_dict = complaint_to_dict(complaint)
+            complaint_dict["contentHash"] = (
+                self.duplicate_checker._generate_content_hash(complaint_dict)
+            )
+            original_complaint_id = await self.duplicate_checker.check_duplicate(
+                self.complaints_collection, complaint_dict
+            )
+            if original_complaint_id:
+                complaint_dict["isDuplicate"] = True
+                complaint_dict["originalComplaintId"] = original_complaint_id
+                complaint_dict["status"] = "duplicate"
+                logger.info(
+                    f"Duplicate complaint detected, original: {original_complaint_id}"
+                )
+            else:
+                complaint_dict["isDuplicate"] = False
+                complaint_dict["originalComplaintId"] = None
             if not complaint_dict.get("processingHistory"):
                 complaint_dict["processingHistory"] = []
-            complaint_dict["processingHistory"].append(
-                {
-                    "action": "created",
-                    "timestamp": datetime.utcnow(),
-                    "userId": "system",
-                    "details": {"source": "email-service"},
-                }
-            )
+            history_entry = {
+                "action": "created",
+                "timestamp": datetime.utcnow(),
+                "userId": "system",
+                "details": {
+                    "source": "email-service",
+                    "isDuplicate": complaint_dict["isDuplicate"],
+                },
+            }
+            if complaint_dict["isDuplicate"]:
+                history_entry["details"]["originalComplaintId"] = original_complaint_id
+            complaint_dict["processingHistory"].append(history_entry)
             result = await self.complaints_collection.insert_one(complaint_dict)
-            return str(result.inserted_id)
+            complaint_id = str(result.inserted_id)
+            if original_complaint_id:
+                await self._link_duplicate_complaints(
+                    original_complaint_id, complaint_id
+                )
+            logger.info(
+                f"Complaint created with ID: {complaint_id} (duplicate: {complaint_dict['isDuplicate']})"
+            )
+            return complaint_id
         except Exception as e:
             logger.error(f"Error creating complaint: {e}")
             raise
+
+    async def _link_duplicate_complaints(self, original_id: str, duplicate_id: str):
+        """Link duplicate complaints by updating the original's relatedComplaints"""
+        try:
+            await self.complaints_collection.update_one(
+                {"_id": ObjectId(original_id)},
+                {
+                    "$addToSet": {"relatedComplaints": ObjectId(duplicate_id)},
+                    "$set": {"lastUpdated": datetime.utcnow()},
+                    "$push": {
+                        "processingHistory": {
+                            "action": "duplicate_linked",
+                            "timestamp": datetime.utcnow(),
+                            "userId": "system",
+                            "details": {"duplicateComplaintId": duplicate_id},
+                        }
+                    },
+                },
+            )
+            logger.info(f"Linked duplicate {duplicate_id} to original {original_id}")
+        except Exception as e:
+            logger.error(f"Error linking duplicate complaints: {e}")
+
+    async def get_duplicate_stats(self) -> dict[str, Any]:
+        """Get statistics about duplicates"""
+        try:
+            pipeline = [
+                {
+                    "$facet": {
+                        "total_complaints": [{"$count": "count"}],
+                        "duplicate_stats": [
+                            {"$group": {"_id": "$isDuplicate", "count": {"$sum": 1}}}
+                        ],
+                        "duplicates_by_customer": [
+                            {"$match": {"isDuplicate": True}},
+                            {
+                                "$group": {
+                                    "_id": "$customerEmail",
+                                    "duplicate_count": {"$sum": 1},
+                                }
+                            },
+                            {"$sort": {"duplicate_count": -1}},
+                            {"$limit": 10},
+                        ],
+                    }
+                }
+            ]
+            result = await self.complaints_collection.aggregate(pipeline).to_list(
+                length=1
+            )
+            if result:
+                stats = result[0]
+                total = (
+                    stats["total_complaints"][0]["count"]
+                    if stats["total_complaints"]
+                    else 0
+                )
+                duplicate_breakdown = {
+                    item["_id"]: item["count"] for item in stats["duplicate_stats"]
+                }
+                return {
+                    "total_complaints": total,
+                    "duplicates": duplicate_breakdown.get(True, 0),
+                    "unique_complaints": duplicate_breakdown.get(False, 0),
+                    "duplicate_rate": (
+                        round((duplicate_breakdown.get(True, 0) / total * 100), 2)
+                        if total > 0
+                        else 0
+                    ),
+                    "top_duplicate_customers": stats["duplicates_by_customer"],
+                    "detector_settings": self.duplicate_checker.get_duplicate_stats(),
+                }
+            return {"error": "No data available"}
+        except Exception as e:
+            logger.error(f"Error getting duplicate stats: {e}")
+            return {"error": str(e)}
 
     async def get_complaints(
         self,

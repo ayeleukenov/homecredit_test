@@ -47,6 +47,20 @@ async def health_check():
     return {"status": "healthy", "timestamp": datetime.utcnow()}
 
 
+@app.get("/duplicate-stats", response_model=dict[str, Any])
+async def get_duplicate_stats():
+    """Get duplicate detection statistics"""
+    try:
+        stats = await mongo_ops.get_duplicate_stats()
+        return stats
+    except Exception as e:
+        logger.error(f"Error fetching duplicate stats: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch duplicate stats: {str(e)}",
+        )
+
+
 @app.post("/complaints", response_model=dict[str, str])
 async def create_complaint(complaint: ComplaintModel):
     """Create a new complaint record"""

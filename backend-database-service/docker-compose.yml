@@ -27,6 +27,8 @@ services:
       - MONGODB_URL=mongodb://admin:password123@mongodb:27017/ai_support?authSource=admin
       - SERVICE_NAME=backend-database-service
       - SERVICE_PORT=8001
+      - DUPLICATE_SIMILARITY_THRESHOLD=0.7
+      - DUPLICATE_TIME_WINDOW_DAYS=7
     depends_on:
       - mongodb
     networks:

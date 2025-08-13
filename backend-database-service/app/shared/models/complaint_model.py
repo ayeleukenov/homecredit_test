@@ -89,6 +89,9 @@ class ComplaintModel(BaseModel):
     followUpRequired: bool = False
     lastUpdated: datetime = Field(default_factory=datetime.utcnow)
     processingHistory: list[ProcessingHistoryEntry] = []
+    isDuplicate: bool = False
+    originalComplaintId: str | None = None
+    contentHash: str | None = None
 
     class Config:
         populate_by_name = True
