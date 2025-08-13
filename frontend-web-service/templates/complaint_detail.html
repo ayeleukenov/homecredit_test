@@ -1,0 +1,370 @@
+<!-- web-interface-service/templates/complaint_detail.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Complaint Details - AI Customer Support</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: Arial, sans-serif; background-color: #f5f5f5; }
+        .container { max-width: 1000px; margin: 0 auto; padding: 20px; }
+        .header { background: #2c3e50; color: white; padding: 20px; margin-bottom: 30px; border-radius: 8px; }
+        .nav-links { margin-bottom: 20px; }
+        .nav-links a { display: inline-block; background: #3498db; color: white; padding: 10px 20px; text-decoration: none; border-radius: 4px; margin-right: 10px; }
+        .nav-links a:hover { background: #2980b9; }
+        
+        .detail-section { background: white; margin-bottom: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); overflow: hidden; }
+        .section-header { background: #34495e; color: white; padding: 15px 20px; font-weight: bold; }
+        .section-content { padding: 20px; }
+        
+        .info-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
+        .info-item { margin-bottom: 15px; }
+        .info-label { font-weight: bold; color: #2c3e50; margin-bottom: 5px; }
+        .info-value { color: #555; }
+        
+        .status-badge { display: inline-block; padding: 4px 12px; border-radius: 12px; font-size: 14px; font-weight: bold; }
+        .status-new { background: #e74c3c; color: white; }
+        .status-in_progress { background: #f39c12; color: white; }
+        .status-resolved { background: #27ae60; color: white; }
+        .status-closed { background: #95a5a6; color: white; }
+        
+        .priority-high { color: #e74c3c; font-weight: bold; font-size: 16px; }
+        .priority-medium { color: #f39c12; font-weight: bold; font-size: 16px; }
+        .priority-low { color: #27ae60; font-weight: bold; font-size: 16px; }
+        
+        .sentiment-positive { color: #27ae60; font-weight: bold; }
+        .sentiment-negative { color: #e74c3c; font-weight: bold; }
+        .sentiment-neutral { color: #7f8c8d; font-weight: bold; }
+        
+        .category-badge { background: #3498db; color: white; padding: 4px 12px; border-radius: 15px; font-size: 14px; }
+        
+        .description-box { background: #f8f9fa; border-left: 4px solid #3498db; padding: 15px; margin: 10px 0; border-radius: 4px; }
+        
+        .tags-container { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+        .tag { background: #ecf0f1; color: #2c3e50; padding: 4px 8px; border-radius: 12px; font-size: 12px; }
+        
+        .entities-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; }
+        .entity-group { background: #f8f9fa; padding: 10px; border-radius: 4px; }
+        .entity-label { font-weight: bold; color: #2c3e50; margin-bottom: 5px; }
+        .entity-list { list-style: none; }
+        .entity-item { background: white; margin: 2px 0; padding: 4px 8px; border-radius: 3px; font-size: 14px; }
+        
+        .history-timeline { position: relative; }
+        .history-item { position: relative; padding: 15px 0 15px 30px; border-left: 2px solid #3498db; }
+        .history-item:last-child { border-left: none; }
+        .history-dot { position: absolute; left: -6px; top: 20px; width: 10px; height: 10px; background: #3498db; border-radius: 50%; }
+        .history-time { color: #7f8c8d; font-size: 12px; }
+        .history-action { font-weight: bold; color: #2c3e50; }
+        .history-details { color: #666; font-size: 14px; margin-top: 5px; }
+        
+        .confidence-bar { background: #ecf0f1; height: 20px; border-radius: 10px; overflow: hidden; margin-top: 5px; }
+        .confidence-fill { height: 100%; background: linear-gradient(to right, #e74c3c, #f39c12, #27ae60); transition: width 0.5s ease; }
+        
+        .escalation-level { display: inline-flex; align-items: center; gap: 5px; }
+        .escalation-dot { width: 12px; height: 12px; border-radius: 50%; }
+        .escalation-0 { background: #27ae60; }
+        .escalation-1 { background: #f39c12; }
+        .escalation-2 { background: #e67e22; }
+        .escalation-3 { background: #e74c3c; }
+        
+        .attachments-list { list-style: none; }
+        .attachment-item { background: #f8f9fa; margin: 5px 0; padding: 10px; border-radius: 4px; border-left: 4px solid #3498db; }
+        .attachment-name { font-weight: bold; color: #2c3e50; }
+        .attachment-info { color: #666; font-size: 12px; margin-top: 5px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📋 Complaint Details</h1>
+            <p>ID: {{ complaint._id }}</p>
+        </div>
+
+        <div class="nav-links">
+            <a href="/">Dashboard</a>
+            <a href="/complaints">← Back to Complaints</a>
+            <a href="/test">Test Processing</a>
+        </div>
+
+        <!-- Basic Information -->
+        <div class="detail-section">
+            <div class="section-header">📧 Basic Information</div>
+            <div class="section-content">
+                <div class="info-grid">
+                    <div class="info-item">
+                        <div class="info-label">Customer Email</div>
+                        <div class="info-value">{{ complaint.customerEmail }}</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">Customer Phone</div>
+                        <div class="info-value">{{ complaint.customerPhone or 'Not provided' }}</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">Customer ID</div>
+                        <div class="info-value">{{ complaint.customerId or 'Not identified' }}</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">Source</div>
+                        <div class="info-value">{{ complaint.source.title() }}</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">Received Date</div>
+                        <div class="info-value">{{ complaint.receivedDate[:19].replace('T', ' ') }}</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">Created Date</div>
+                        <div class="info-value">{{ complaint.createdDate[:19].replace('T', ' ') }}</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Subject and Description -->
+        <div class="detail-section">
+            <div class="section-header">💬 Message Content</div>
+            <div class="section-content">
+                <div class="info-item">
+                    <div class="info-label">Subject</div>
+                    <div class="info-value" style="font-size: 18px; font-weight: bold;">{{ complaint.subject }}</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Description</div>
+                    <div class="description-box">{{ complaint.description }}</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- AI Analysis Results -->
+        <div class="detail-section">
+            <div class="section-header">🤖 AI Analysis Results</div>
+            <div class="section-content">
+                <div class="info-grid">
+                    <div class="info-item">
+                        <div class="info-label">Category</div>
+                        <div class="info-value">
+                            <span class="category-badge">{{ complaint.category.title() }}</span>
+                            {% if complaint.subcategory %}
+                                <small style="margin-left: 10px;">{{ complaint.subcategory }}</small>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">Priority</div>
+                        <div class="info-value">
+                            <span class="priority-{{ complaint.priority }}">{{ complaint.priority.upper() }}</span>
+                        </div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">Sentiment</div>
+                        <div class="info-value">
+                            <span class="sentiment-{{ complaint.sentiment }}">
+                                {% if complaint.sentiment == 'positive' %}😊 Positive{% elif complaint.sentiment == 'negative' %}😠 Negative{% else %}😐 Neutral{% endif %}
+                            </span>
+                        </div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">Confidence Score</div>
+                        <div class="info-value">
+                            {{ (complaint.confidenceScore * 100)|round(1) }}%
+                            <div class="confidence-bar">
+                                <div class="confidence-fill" style="width: {{ (complaint.confidenceScore * 100)|round(1) }}%"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {% if complaint.tags %}
+                <div class="info-item">
+                    <div class="info-label">Tags</div>
+                    <div class="tags-container">
+                        {% for tag in complaint.tags %}
+                        <span class="tag">{{ tag }}</span>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Status and Assignment -->
+        <div class="detail-section">
+            <div class="section-header">📊 Status & Assignment</div>
+            <div class="section-content">
+                <div class="info-grid">
+                    <div class="info-item">
+                        <div class="info-label">Status</div>
+                        <div class="info-value">
+                            <span class="status-badge status-{{ complaint.status }}">
+                                {{ complaint.status.replace('_', ' ').title() }}
+                            </span>
+                        </div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">Assigned To</div>
+                        <div class="info-value">{{ complaint.assignedTo or 'Unassigned' }}</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">Department</div>
+                        <div class="info-value">{{ complaint.department or 'Not specified' }}</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">Escalation Level</div>
+                        <div class="info-value">
+                            <div class="escalation-level">
+                                <span class="escalation-dot escalation-{{ complaint.escalationLevel }}"></span>
+                                Level {{ complaint.escalationLevel }}
+                                {% if complaint.escalationLevel == 0 %}(Normal){% elif complaint.escalationLevel == 1 %}(Supervisor){% elif complaint.escalationLevel == 2 %}(Manager){% else %}(Legal){% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Extracted Entities -->
+        {% if complaint.extractedEntities %}
+        <div class="detail-section">
+            <div class="section-header">🔍 Extracted Entities</div>
+            <div class="section-content">
+                <div class="entities-grid">
+                    {% if complaint.extractedEntities.orderNumbers %}
+                    <div class="entity-group">
+                        <div class="entity-label">📦 Order Numbers</div>
+                        <ul class="entity-list">
+                            {% for order in complaint.extractedEntities.orderNumbers %}
+                            <li class="entity-item">{{ order }}</li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                    {% endif %}
+
+                    {% if complaint.extractedEntities.amounts %}
+                    <div class="entity-group">
+                        <div class="entity-label">💰 Amounts</div>
+                        <ul class="entity-list">
+                            {% for amount in complaint.extractedEntities.amounts %}
+                            <li class="entity-item">${{ amount }}</li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                    {% endif %}
+
+                    {% if complaint.extractedEntities.products %}
+                    <div class="entity-group">
+                        <div class="entity-label">🛍️ Products</div>
+                        <ul class="entity-list">
+                            {% for product in complaint.extractedEntities.products %}
+                            <li class="entity-item">{{ product }}</li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                    {% endif %}
+
+                    {% if complaint.extractedEntities.dates %}
+                    <div class="entity-group">
+                        <div class="entity-label">📅 Dates</div>
+                        <ul class="entity-list">
+                            {% for date in complaint.extractedEntities.dates %}
+                            <li class="entity-item">{{ date[:10] }}</li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Resolution Info -->
+        <div class="detail-section">
+            <div class="section-header">⚡ Resolution Information</div>
+            <div class="section-content">
+                <div class="info-grid">
+                    <div class="info-item">
+                        <div class="info-label">Estimated Resolution Time</div>
+                        <div class="info-value">{{ complaint.estimatedResolutionTime }} hours</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">Legal Implications</div>
+                        <div class="info-value">
+                            {% if complaint.legalImplications %}
+                                <span style="color: #e74c3c; font-weight: bold;">⚠️ Yes</span>
+                            {% else %}
+                                <span style="color: #27ae60;">✅ No</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">Compensation Required</div>
+                        <div class="info-value">
+                            {% if complaint.compensationRequired %}
+                                <span style="color: #f39c12; font-weight: bold;">💰 Yes</span>
+                            {% else %}
+                                <span style="color: #27ae60;">❌ No</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">Follow-up Required</div>
+                        <div class="info-value">
+                            {% if complaint.followUpRequired %}
+                                <span style="color: #3498db; font-weight: bold;">📞 Yes</span>
+                            {% else %}
+                                <span style="color: #27ae60;">✅ No</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Attachments -->
+        {% if complaint.attachments %}
+        <div class="detail-section">
+            <div class="section-header">📎 Attachments</div>
+            <div class="section-content">
+                <ul class="attachments-list">
+                    {% for attachment in complaint.attachments %}
+                    <li class="attachment-item">
+                        <div class="attachment-name">📄 {{ attachment.filename }}</div>
+                        <div class="attachment-info">
+                            Type: {{ attachment.fileType.upper() }} | 
+                            Size: {{ (attachment.fileSize / 1024)|round(1) }} KB
+                            {% if attachment.extractedText %}
+                            | Text extracted: {{ attachment.extractedText[:100] }}...
+                            {% endif %}
+                        </div>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Processing History -->
+        {% if complaint.processingHistory %}
+        <div class="detail-section">
+            <div class="section-header">📜 Processing History</div>
+            <div class="section-content">
+                <div class="history-timeline">
+                    {% for entry in complaint.processingHistory %}
+                    <div class="history-item">
+                        <div class="history-dot"></div>
+                        <div class="history-time">{{ entry.timestamp[:19].replace('T', ' ') }}</div>
+                        <div class="history-action">{{ entry.action.replace('_', ' ').title() }}</div>
+                        <div class="history-details">
+                            By: {{ entry.userId or 'System' }}
+                            {% if entry.details %}
+                            <br>{{ entry.details }}
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</body>
+</html>

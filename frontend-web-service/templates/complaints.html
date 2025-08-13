@@ -1,0 +1,204 @@
+<!-- web-interface-service/templates/complaints.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Complaints - AI Customer Support</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: Arial, sans-serif; background-color: #f5f5f5; }
+        .container { max-width: 1400px; margin: 0 auto; padding: 20px; }
+        .header { background: #2c3e50; color: white; padding: 20px; margin-bottom: 30px; border-radius: 8px; }
+        .nav-links { margin-bottom: 20px; }
+        .nav-links a { display: inline-block; background: #3498db; color: white; padding: 10px 20px; text-decoration: none; border-radius: 4px; margin-right: 10px; }
+        .nav-links a:hover { background: #2980b9; }
+        
+        .filters { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        .filter-group { display: inline-block; margin-right: 20px; }
+        .filter-group label { display: block; margin-bottom: 5px; font-weight: bold; }
+        .filter-group select { padding: 8px; border: 1px solid #ddd; border-radius: 4px; }
+        .filter-btn { background: #27ae60; color: white; padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; }
+        
+        .complaints-section { background: white; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .complaints-header { background: #34495e; color: white; padding: 15px 20px; border-radius: 8px 8px 0 0; }
+        .complaints-table { width: 100%; }
+        .complaints-table th, .complaints-table td { padding: 12px; text-align: left; border-bottom: 1px solid #eee; }
+        .complaints-table th { background: #ecf0f1; font-weight: bold; }
+        .complaints-table tr:hover { background: #f8f9fa; }
+        
+        .status-badge { display: inline-block; padding: 4px 8px; border-radius: 12px; font-size: 12px; font-weight: bold; }
+        .status-new { background: #e74c3c; color: white; }
+        .status-in_progress { background: #f39c12; color: white; }
+        .status-resolved { background: #27ae60; color: white; }
+        .status-closed { background: #95a5a6; color: white; }
+        
+        .priority-high { color: #e74c3c; font-weight: bold; }
+        .priority-medium { color: #f39c12; font-weight: bold; }
+        .priority-low { color: #27ae60; font-weight: bold; }
+        
+        .category-badge { background: #3498db; color: white; padding: 2px 6px; border-radius: 3px; font-size: 11px; }
+        
+        .pagination { text-align: center; margin-top: 20px; }
+        .pagination a { display: inline-block; padding: 8px 12px; margin: 0 2px; background: #3498db; color: white; text-decoration: none; border-radius: 4px; }
+        .pagination a:hover { background: #2980b9; }
+        .pagination .current { background: #e74c3c; }
+        
+        .no-complaints { text-align: center; padding: 40px; color: #666; }
+        .complaint-link { color: #3498db; text-decoration: none; }
+        .complaint-link:hover { text-decoration: underline; }
+        
+        .sentiment-positive { color: #27ae60; }
+        .sentiment-negative { color: #e74c3c; }
+        .sentiment-neutral { color: #7f8c8d; }
+        
+        .truncate { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📋 Customer Complaints</h1>
+            <p>Manage and track all customer support requests</p>
+        </div>
+
+        <div class="nav-links">
+            <a href="/">Dashboard</a>
+            <a href="/complaints">All Complaints</a>
+            <a href="/test">Test Processing</a>
+        </div>
+
+        <div class="filters">
+            <form method="get" style="display: inline-block;">
+                <div class="filter-group">
+                    <label for="status_filter">Status:</label>
+                    <select name="status_filter" id="status_filter">
+                        <option value="">All Statuses</option>
+                        <option value="new" {% if status_filter == 'new' %}selected{% endif %}>New</option>
+                        <option value="in_progress" {% if status_filter == 'in_progress' %}selected{% endif %}>In Progress</option>
+                        <option value="resolved" {% if status_filter == 'resolved' %}selected{% endif %}>Resolved</option>
+                        <option value="closed" {% if status_filter == 'closed' %}selected{% endif %}>Closed</option>
+                    </select>
+                </div>
+                
+                <div class="filter-group">
+                    <label for="category_filter">Category:</label>
+                    <select name="category_filter" id="category_filter">
+                        <option value="">All Categories</option>
+                        <option value="returns" {% if category_filter == 'returns' %}selected{% endif %}>Returns</option>
+                        <option value="delivery" {% if category_filter == 'delivery' %}selected{% endif %}>Delivery</option>
+                        <option value="quality" {% if category_filter == 'quality' %}selected{% endif %}>Quality</option>
+                        <option value="technical" {% if category_filter == 'technical' %}selected{% endif %}>Technical</option>
+                        <option value="billing" {% if category_filter == 'billing' %}selected{% endif %}>Billing</option>
+                        <option value="other" {% if category_filter == 'other' %}selected{% endif %}>Other</option>
+                    </select>
+                </div>
+                
+                <button type="submit" class="filter-btn">🔍 Filter</button>
+                <a href="/complaints" style="margin-left: 10px; color: #e74c3c; text-decoration: none;">Clear Filters</a>
+            </form>
+        </div>
+
+        <div class="complaints-section">
+            <div class="complaints-header">
+                <h2>📋 Complaints List (Page {{ page }})</h2>
+            </div>
+
+            {% if complaints %}
+            <table class="complaints-table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Customer</th>
+                        <th>Subject</th>
+                        <th>Category</th>
+                        <th>Priority</th>
+                        <th>Status</th>
+                        <th>Sentiment</th>
+                        <th>Created</th>
+                        <th>Assigned To</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for complaint in complaints %}
+                    <tr>
+                        <td>
+                            <a href="/complaint/{{ complaint._id }}" class="complaint-link">
+                                {{ complaint._id[:8] }}...
+                            </a>
+                        </td>
+                        <td>
+                            <div class="truncate">{{ complaint.customerEmail }}</div>
+                        </td>
+                        <td>
+                            <div class="truncate" title="{{ complaint.subject }}">
+                                {{ complaint.subject }}
+                            </div>
+                        </td>
+                        <td>
+                            <span class="category-badge">{{ complaint.category.title() }}</span>
+                        </td>
+                        <td>
+                            <span class="priority-{{ complaint.priority }}">
+                                {{ complaint.priority.upper() }}
+                            </span>
+                        </td>
+                        <td>
+                            <span class="status-badge status-{{ complaint.status }}">
+                                {{ complaint.status.replace('_', ' ').title() }}
+                            </span>
+                        </td>
+                        <td>
+                            <span class="sentiment-{{ complaint.sentiment }}">
+                                {% if complaint.sentiment == 'positive' %}😊{% elif complaint.sentiment == 'negative' %}😠{% else %}😐{% endif %}
+                                {{ complaint.sentiment.title() }}
+                            </span>
+                        </td>
+                        <td>
+                            <small>{{ complaint.createdDate[:19].replace('T', ' ') }}</small>
+                        </td>
+                        <td>
+                            <small>{{ complaint.assignedTo or 'Unassigned' }}</small>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <div class="no-complaints">
+                <h3>📭 No Complaints Found</h3>
+                <p>{% if status_filter or category_filter %}
+                    No complaints match your current filters.
+                    {% else %}
+                    No complaints have been processed yet. Try processing some test emails!
+                    {% endif %}</p>
+                <a href="/test" style="display: inline-block; margin-top: 10px; background: #3498db; color: white; padding: 10px 20px; text-decoration: none; border-radius: 4px;">🧪 Process Test Email</a>
+            </div>
+            {% endif %}
+        </div>
+
+        {% if complaints %}
+        <div class="pagination">
+            {% if page > 1 %}
+                <a href="/complaints?page={{ page - 1 }}{% if status_filter %}&status_filter={{ status_filter }}{% endif %}{% if category_filter %}&category_filter={{ category_filter }}{% endif %}">← Previous</a>
+            {% endif %}
+            
+            <a href="/complaints?page={{ page }}{% if status_filter %}&status_filter={{ status_filter }}{% endif %}{% if category_filter %}&category_filter={{ category_filter }}{% endif %}" class="current">{{ page }}</a>
+            
+            {% if complaints|length == 20 %}
+                <a href="/complaints?page={{ page + 1 }}{% if status_filter %}&status_filter={{ status_filter }}{% endif %}{% if category_filter %}&category_filter={{ category_filter }}{% endif %}">Next →</a>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+
+    <script>
+        // Auto-refresh every 60 seconds if no filters applied
+        {% if not status_filter and not category_filter %}
+        setTimeout(function() {
+            window.location.reload();
+        }, 60000);
+        {% endif %}
+    </script>
+</body>
+</html>

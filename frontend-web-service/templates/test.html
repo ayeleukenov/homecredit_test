@@ -1,0 +1,162 @@
+<!-- web-interface-service/templates/test.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Email Processing</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: Arial, sans-serif; background-color: #f5f5f5; }
+        .container { max-width: 800px; margin: 0 auto; padding: 20px; }
+        .header { background: #2c3e50; color: white; padding: 20px; margin-bottom: 30px; border-radius: 8px; }
+        .form-section { background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .form-group { margin-bottom: 20px; }
+        .form-group label { display: block; margin-bottom: 5px; font-weight: bold; color: #2c3e50; }
+        .form-group input, .form-group textarea { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; }
+        .form-group textarea { height: 200px; resize: vertical; }
+        .btn { background: #3498db; color: white; padding: 12px 24px; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; }
+        .btn:hover { background: #2980b9; }
+        .btn:disabled { background: #bdc3c7; cursor: not-allowed; }
+        .result { margin-top: 20px; padding: 15px; border-radius: 4px; }
+        .result.success { background: #d5f4e6; border: 1px solid #27ae60; color: #1e8449; }
+        .result.error { background: #fadbd8; border: 1px solid #e74c3c; color: #c0392b; }
+        .nav-links { margin-bottom: 20px; }
+        .nav-links a { display: inline-block; background: #3498db; color: white; padding: 10px 20px; text-decoration: none; border-radius: 4px; margin-right: 10px; }
+        .nav-links a:hover { background: #2980b9; }
+        .sample-emails { margin-top: 30px; }
+        .sample-email { background: #f8f9fa; padding: 15px; margin: 10px 0; border-radius: 4px; border-left: 4px solid #3498db; }
+        .sample-email h4 { color: #2c3e50; margin-bottom: 10px; }
+        .sample-email button { background: #27ae60; color: white; padding: 5px 10px; border: none; border-radius: 3px; cursor: pointer; font-size: 12px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🧪 Test Email Processing</h1>
+            <p>Test the AI email processing pipeline with sample or custom emails</p>
+        </div>
+
+        <div class="nav-links">
+            <a href="/">Dashboard</a>
+            <a href="/complaints">All Complaints</a>
+            <a href="/test">Test Processing</a>
+        </div>
+
+        <div class="form-section">
+            <h2>Process Test Email</h2>
+            <form id="testForm">
+                <div class="form-group">
+                    <label for="customer_email">Customer Email:</label>
+                    <input type="email" id="customer_email" name="customer_email" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="subject">Subject:</label>
+                    <input type="text" id="subject" name="subject" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="content">Email Content:</label>
+                    <textarea id="content" name="content" required placeholder="Enter the email content here..."></textarea>
+                </div>
+                
+                <button type="submit" class="btn" id="submitBtn">🚀 Process Email</button>
+            </form>
+            
+            <div id="result" style="display: none;"></div>
+        </div>
+
+        <div class="sample-emails">
+            <h2>📧 Sample Test Emails</h2>
+            
+            <div class="sample-email">
+                <h4>🔄 Return Request (High Priority)</h4>
+                <p><strong>From:</strong> angry.customer@email.com</p>
+                <p><strong>Subject:</strong> URGENT: Return defective product ORDER-12345</p>
+                <p><strong>Content:</strong> I am extremely frustrated with my recent purchase ORDER-12345. The product arrived broken and I need an immediate refund of $199.99. This is unacceptable and I expect this to be resolved TODAY!</p>
+                <button onclick="loadSample('angry.customer@email.com', 'URGENT: Return defective product ORDER-12345', 'I am extremely frustrated with my recent purchase ORDER-12345. The product arrived broken and I need an immediate refund of $199.99. This is unacceptable and I expect this to be resolved TODAY!')">Load Sample</button>
+            </div>
+            
+            <div class="sample-email">
+                <h4>📦 Delivery Issue (Medium Priority)</h4>
+                <p><strong>From:</strong> customer@email.com</p>
+                <p><strong>Subject:</strong> Package not delivered - ORDER-67890</p>
+                <p><strong>Content:</strong> Hi, I ordered item ORDER-67890 on January 15th and it was supposed to arrive by January 20th. It's now January 25th and I still haven't received it. The tracking shows it was delivered but I never got the package. Can you please help me track this down?</p>
+                <button onclick="loadSample('customer@email.com', 'Package not delivered - ORDER-67890', 'Hi, I ordered item ORDER-67890 on January 15th and it was supposed to arrive by January 20th. It\\'s now January 25th and I still haven\\'t received it. The tracking shows it was delivered but I never got the package. Can you please help me track this down?')">Load Sample</button>
+            </div>
+            
+            <div class="sample-email">
+                <h4>💳 Billing Question (Low Priority)</h4>
+                <p><strong>From:</strong> john.doe@email.com</p>
+                <p><strong>Subject:</strong> Question about my invoice</p>
+                <p><strong>Content:</strong> Hello, I received my invoice for $45.99 but I'm not sure what this charge is for. Could you please provide more details about this transaction? Thank you for your help.</p>
+                <button onclick="loadSample('john.doe@email.com', 'Question about my invoice', 'Hello, I received my invoice for $45.99 but I\\'m not sure what this charge is for. Could you please provide more details about this transaction? Thank you for your help.')">Load Sample</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function loadSample(email, subject, content) {
+            document.getElementById('customer_email').value = email;
+            document.getElementById('subject').value = subject;
+            document.getElementById('content').value = content;
+        }
+
+        document.getElementById('testForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const submitBtn = document.getElementById('submitBtn');
+            const resultDiv = document.getElementById('result');
+            
+            // Disable button and show loading
+            submitBtn.disabled = true;
+            submitBtn.textContent = '⏳ Processing...';
+            resultDiv.style.display = 'none';
+            
+            const formData = {
+                customer_email: document.getElementById('customer_email').value,
+                subject: document.getElementById('subject').value,
+                content: document.getElementById('content').value,
+                received_date: new Date().toISOString()
+            };
+            
+            try {
+                const response = await fetch('/api/test-email', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(formData)
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok) {
+                    resultDiv.className = 'result success';
+                    resultDiv.innerHTML = `
+                        <h3>✅ Success!</h3>
+                        <p>Email processed successfully!</p>
+                        <p><strong>Complaint ID:</strong> ${result.complaint_id}</p>
+                        <p><a href="/complaint/${result.complaint_id}" target="_blank">View Complaint Details</a></p>
+                    `;
+                } else {
+                    throw new Error(result.detail || 'Processing failed');
+                }
+                
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.innerHTML = `
+                    <h3>❌ Error</h3>
+                    <p>Failed to process email: ${error.message}</p>
+                `;
+            }
+            
+            // Reset button and show result
+            submitBtn.disabled = false;
+            submitBtn.textContent = '🚀 Process Email';
+            resultDiv.style.display = 'block';
+        });
+    </script>
+</body>
+</html>
