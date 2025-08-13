@@ -1,93 +1,525 @@
-<!-- web-interface-service/templates/complaint_detail.html -->
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Complaint Details - AI Customer Support</title>
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: Arial, sans-serif; background-color: #f5f5f5; }
-        .container { max-width: 1000px; margin: 0 auto; padding: 20px; }
-        .header { background: #2c3e50; color: white; padding: 20px; margin-bottom: 30px; border-radius: 8px; }
-        .nav-links { margin-bottom: 20px; }
-        .nav-links a { display: inline-block; background: #3498db; color: white; padding: 10px 20px; text-decoration: none; border-radius: 4px; margin-right: 10px; }
-        .nav-links a:hover { background: #2980b9; }
-        
-        .detail-section { background: white; margin-bottom: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); overflow: hidden; }
-        .section-header { background: #34495e; color: white; padding: 15px 20px; font-weight: bold; }
-        .section-content { padding: 20px; }
-        
-        .info-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
-        .info-item { margin-bottom: 15px; }
-        .info-label { font-weight: bold; color: #2c3e50; margin-bottom: 5px; }
-        .info-value { color: #555; }
-        
-        .status-badge { display: inline-block; padding: 4px 12px; border-radius: 12px; font-size: 14px; font-weight: bold; }
-        .status-new { background: #e74c3c; color: white; }
-        .status-in_progress { background: #f39c12; color: white; }
-        .status-resolved { background: #27ae60; color: white; }
-        .status-closed { background: #95a5a6; color: white; }
-        
-        .priority-high { color: #e74c3c; font-weight: bold; font-size: 16px; }
-        .priority-medium { color: #f39c12; font-weight: bold; font-size: 16px; }
-        .priority-low { color: #27ae60; font-weight: bold; font-size: 16px; }
-        
-        .sentiment-positive { color: #27ae60; font-weight: bold; }
-        .sentiment-negative { color: #e74c3c; font-weight: bold; }
-        .sentiment-neutral { color: #7f8c8d; font-weight: bold; }
-        
-        .category-badge { background: #3498db; color: white; padding: 4px 12px; border-radius: 15px; font-size: 14px; }
-        
-        .description-box { background: #f8f9fa; border-left: 4px solid #3498db; padding: 15px; margin: 10px 0; border-radius: 4px; }
-        
-        .tags-container { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
-        .tag { background: #ecf0f1; color: #2c3e50; padding: 4px 8px; border-radius: 12px; font-size: 12px; }
-        
-        .entities-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; }
-        .entity-group { background: #f8f9fa; padding: 10px; border-radius: 4px; }
-        .entity-label { font-weight: bold; color: #2c3e50; margin-bottom: 5px; }
-        .entity-list { list-style: none; }
-        .entity-item { background: white; margin: 2px 0; padding: 4px 8px; border-radius: 3px; font-size: 14px; }
-        
-        .history-timeline { position: relative; }
-        .history-item { position: relative; padding: 15px 0 15px 30px; border-left: 2px solid #3498db; }
-        .history-item:last-child { border-left: none; }
-        .history-dot { position: absolute; left: -6px; top: 20px; width: 10px; height: 10px; background: #3498db; border-radius: 50%; }
-        .history-time { color: #7f8c8d; font-size: 12px; }
-        .history-action { font-weight: bold; color: #2c3e50; }
-        .history-details { color: #666; font-size: 14px; margin-top: 5px; }
-        
-        .confidence-bar { background: #ecf0f1; height: 20px; border-radius: 10px; overflow: hidden; margin-top: 5px; }
-        .confidence-fill { height: 100%; background: linear-gradient(to right, #e74c3c, #f39c12, #27ae60); transition: width 0.5s ease; }
-        
-        .escalation-level { display: inline-flex; align-items: center; gap: 5px; }
-        .escalation-dot { width: 12px; height: 12px; border-radius: 50%; }
-        .escalation-0 { background: #27ae60; }
-        .escalation-1 { background: #f39c12; }
-        .escalation-2 { background: #e67e22; }
-        .escalation-3 { background: #e74c3c; }
-        
-        .attachments-list { list-style: none; }
-        .attachment-item { background: #f8f9fa; margin: 5px 0; padding: 10px; border-radius: 4px; border-left: 4px solid #3498db; }
-        .attachment-name { font-weight: bold; color: #2c3e50; }
-        .attachment-info { color: #666; font-size: 12px; margin-top: 5px; }
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f5f5f5;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            background: #2c3e50;
+            color: white;
+            padding: 20px;
+            margin-bottom: 30px;
+            border-radius: 8px;
+        }
+
+        .nav-links {
+            margin-bottom: 20px;
+        }
+
+        .nav-links a {
+            display: inline-block;
+            background: #3498db;
+            color: white;
+            padding: 10px 20px;
+            text-decoration: none;
+            border-radius: 4px;
+            margin-right: 10px;
+        }
+
+        .nav-links a:hover {
+            background: #2980b9;
+        }
+
+        .detail-section {
+            background: white;
+            margin-bottom: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+
+        .section-header {
+            background: #34495e;
+            color: white;
+            padding: 15px 20px;
+            border-radius: 8px 8px 0 0;
+        }
+
+        .section-content {
+            padding: 20px;
+        }
+
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+        }
+
+        .info-item {
+            margin-bottom: 15px;
+        }
+
+        .info-label {
+            font-weight: bold;
+            color: #2c3e50;
+            margin-bottom: 5px;
+        }
+
+        .info-value {
+            color: #555;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 14px;
+            font-weight: bold;
+        }
+
+        .status-new {
+            background: #e74c3c;
+            color: white;
+        }
+
+        .status-in_progress {
+            background: #f39c12;
+            color: white;
+        }
+
+        .status-resolved {
+            background: #27ae60;
+            color: white;
+        }
+
+        .status-closed {
+            background: #95a5a6;
+            color: white;
+        }
+
+        .priority-high {
+            color: #e74c3c;
+            font-weight: bold;
+            font-size: 16px;
+        }
+
+        .priority-medium {
+            color: #f39c12;
+            font-weight: bold;
+            font-size: 16px;
+        }
+
+        .priority-low {
+            color: #27ae60;
+            font-weight: bold;
+            font-size: 16px;
+        }
+
+        .sentiment-positive {
+            color: #27ae60;
+            font-weight: bold;
+        }
+
+        .sentiment-negative {
+            color: #e74c3c;
+            font-weight: bold;
+        }
+
+        .sentiment-neutral {
+            color: #7f8c8d;
+            font-weight: bold;
+        }
+
+        .category-badge {
+            background: #3498db;
+            color: white;
+            padding: 4px 12px;
+            border-radius: 15px;
+            font-size: 14px;
+        }
+
+        .description-box {
+            background: #f8f9fa;
+            border-left: 4px solid #3498db;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 4px;
+        }
+
+        .tags-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 10px;
+        }
+
+        .tag {
+            background: #ecf0f1;
+            color: #2c3e50;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+        }
+
+        .entities-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+        }
+
+        .entity-group {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+        }
+
+        .entity-label {
+            font-weight: bold;
+            color: #2c3e50;
+            margin-bottom: 5px;
+        }
+
+        .entity-list {
+            list-style: none;
+        }
+
+        .entity-item {
+            background: white;
+            margin: 2px 0;
+            padding: 4px 8px;
+            border-radius: 3px;
+            font-size: 14px;
+        }
+
+        .history-timeline {
+            position: relative;
+        }
+
+        .history-item {
+            position: relative;
+            padding: 15px 0 15px 30px;
+            border-left: 2px solid #3498db;
+        }
+
+        .history-item:last-child {
+            border-left: none;
+        }
+
+        .history-dot {
+            position: absolute;
+            left: -6px;
+            top: 20px;
+            width: 10px;
+            height: 10px;
+            background: #3498db;
+            border-radius: 50%;
+        }
+
+        .history-time {
+            color: #7f8c8d;
+            font-size: 12px;
+        }
+
+        .history-action {
+            font-weight: bold;
+            color: #2c3e50;
+        }
+
+        .history-details {
+            color: #666;
+            font-size: 14px;
+            margin-top: 5px;
+        }
+
+        .confidence-bar {
+            background: #ecf0f1;
+            height: 20px;
+            border-radius: 10px;
+            overflow: hidden;
+            margin-top: 5px;
+        }
+
+        .confidence-fill {
+            height: 100%;
+            background: linear-gradient(to right, #e74c3c, #f39c12, #27ae60);
+            transition: width 0.5s ease;
+        }
+
+        .escalation-level {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .escalation-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+        }
+
+        .escalation-0 {
+            background: #27ae60;
+        }
+
+        .escalation-1 {
+            background: #f39c12;
+        }
+
+        .escalation-2 {
+            background: #e67e22;
+        }
+
+        .escalation-3 {
+            background: #e74c3c;
+        }
+
+        .attachments-list {
+            list-style: none;
+        }
+
+        .attachment-item {
+            background: #f8f9fa;
+            margin: 5px 0;
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 4px solid #3498db;
+            position: relative;
+        }
+
+        .attachment-header {
+            display: flex;
+            justify-content: between;
+            align-items: center;
+        }
+
+        .attachment-name {
+            font-weight: bold;
+            color: #2c3e50;
+            font-size: 16px;
+        }
+
+        .attachment-info {
+            color: #666;
+            font-size: 12px;
+            margin: 8px 0;
+        }
+
+        .attachment-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .download-btn {
+            background: #27ae60;
+            color: white;
+            padding: 6px 12px;
+            text-decoration: none;
+            border-radius: 4px;
+            font-size: 12px;
+            transition: background 0.3s ease;
+        }
+
+        .download-btn:hover {
+            background: #2ecc71;
+        }
+
+        .download-btn.disabled {
+            background: #95a5a6;
+            cursor: not-allowed;
+            pointer-events: none;
+        }
+
+        .s3-status {
+            display: inline-block;
+            padding: 2px 6px;
+            border-radius: 10px;
+            font-size: 10px;
+            margin-left: 10px;
+        }
+
+        .s3-available {
+            background: #d5f4e6;
+            color: #27ae60;
+        }
+
+        .s3-unavailable {
+            background: #fadbd8;
+            color: #e74c3c;
+        }
+
+        .attachment-preview {
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 10px;
+            margin-top: 8px;
+            max-height: 200px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            line-height: 1.4;
+        }
+
+        .preview-toggle {
+            background: #3498db;
+            color: white;
+            padding: 4px 8px;
+            border: none;
+            border-radius: 3px;
+            font-size: 11px;
+            cursor: pointer;
+            margin-top: 5px;
+        }
+
+        .preview-toggle:hover {
+            background: #2980b9;
+        }
+
+        .attachments-list {
+            list-style: none;
+        }
+
+        .attachment-item {
+            background: #f8f9fa;
+            margin: 10px 0;
+            padding: 20px;
+            border-radius: 8px;
+            border-left: 4px solid #3498db;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .attachment-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .attachment-name {
+            font-weight: bold;
+            color: #2c3e50;
+            font-size: 16px;
+        }
+
+        .attachment-info {
+            color: #666;
+            font-size: 13px;
+            margin-bottom: 15px;
+        }
+
+        .attachment-actions {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .download-btn {
+            background: #27ae60;
+            color: white;
+            padding: 8px 16px;
+            text-decoration: none;
+            border-radius: 4px;
+            font-size: 14px;
+            transition: background 0.3s ease;
+            border: none;
+            cursor: pointer;
+        }
+
+        .download-btn:hover {
+            background: #2ecc71;
+        }
+
+        .download-btn.disabled {
+            background: #95a5a6;
+            cursor: not-allowed;
+            pointer-events: none;
+        }
+
+        .s3-status {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            margin-left: 10px;
+            font-weight: bold;
+        }
+
+        .s3-available {
+            background: #d5f4e6;
+            color: #27ae60;
+        }
+
+        .s3-unavailable {
+            background: #fadbd8;
+            color: #e74c3c;
+        }
+
+        .attachment-preview {
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 15px;
+            margin-top: 10px;
+            max-height: 300px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            line-height: 1.5;
+        }
+
+        .image-preview {
+            margin-top: 10px;
+            text-align: center;
+        }
+
+        .preview-toggle {
+            background: #3498db;
+            color: white;
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: background 0.3s ease;
+        }
+
+        .preview-toggle:hover {
+            background: #2980b9;
+        }
     </style>
 </head>
+
 <body>
     <div class="container">
         <div class="header">
             <h1>📋 Complaint Details</h1>
             <p>ID: {{ complaint._id }}</p>
         </div>
-
         <div class="nav-links">
             <a href="/">Dashboard</a>
             <a href="/complaints">← Back to Complaints</a>
             <a href="/test">Test Processing</a>
         </div>
-
-        <!-- Basic Information -->
         <div class="detail-section">
             <div class="section-header">📧 Basic Information</div>
             <div class="section-content">
@@ -119,8 +551,6 @@
                 </div>
             </div>
         </div>
-
-        <!-- Subject and Description -->
         <div class="detail-section">
             <div class="section-header">💬 Message Content</div>
             <div class="section-content">
@@ -134,8 +564,6 @@
                 </div>
             </div>
         </div>
-
-        <!-- AI Analysis Results -->
         <div class="detail-section">
             <div class="section-header">🤖 AI Analysis Results</div>
             <div class="section-content">
@@ -145,7 +573,7 @@
                         <div class="info-value">
                             <span class="category-badge">{{ complaint.category.title() }}</span>
                             {% if complaint.subcategory %}
-                                <small style="margin-left: 10px;">{{ complaint.subcategory }}</small>
+                            <small style="margin-left: 10px;">{{ complaint.subcategory }}</small>
                             {% endif %}
                         </div>
                     </div>
@@ -159,7 +587,8 @@
                         <div class="info-label">Sentiment</div>
                         <div class="info-value">
                             <span class="sentiment-{{ complaint.sentiment }}">
-                                {% if complaint.sentiment == 'positive' %}😊 Positive{% elif complaint.sentiment == 'negative' %}😠 Negative{% else %}😐 Neutral{% endif %}
+                                {% if complaint.sentiment == 'positive' %}😊 Positive{% elif complaint.sentiment ==
+                                'negative' %}😠 Negative{% else %}😐 Neutral{% endif %}
                             </span>
                         </div>
                     </div>
@@ -168,12 +597,12 @@
                         <div class="info-value">
                             {{ (complaint.confidenceScore * 100)|round(1) }}%
                             <div class="confidence-bar">
-                                <div class="confidence-fill" style="width: {{ (complaint.confidenceScore * 100)|round(1) }}%"></div>
+                                <div class="confidence-fill"
+                                    style="width: {{ (complaint.confidenceScore * 100)|round(1) }}%"></div>
                             </div>
                         </div>
                     </div>
                 </div>
-
                 {% if complaint.tags %}
                 <div class="info-item">
                     <div class="info-label">Tags</div>
@@ -186,8 +615,6 @@
                 {% endif %}
             </div>
         </div>
-
-        <!-- Status and Assignment -->
         <div class="detail-section">
             <div class="section-header">📊 Status & Assignment</div>
             <div class="section-content">
@@ -214,15 +641,15 @@
                             <div class="escalation-level">
                                 <span class="escalation-dot escalation-{{ complaint.escalationLevel }}"></span>
                                 Level {{ complaint.escalationLevel }}
-                                {% if complaint.escalationLevel == 0 %}(Normal){% elif complaint.escalationLevel == 1 %}(Supervisor){% elif complaint.escalationLevel == 2 %}(Manager){% else %}(Legal){% endif %}
+                                {% if complaint.escalationLevel == 0 %}(Normal){% elif complaint.escalationLevel == 1
+                                %}(Supervisor){% elif complaint.escalationLevel == 2 %}(Manager){% else %}(Legal){%
+                                endif %}
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
-
-        <!-- Extracted Entities -->
         {% if complaint.extractedEntities %}
         <div class="detail-section">
             <div class="section-header">🔍 Extracted Entities</div>
@@ -238,7 +665,6 @@
                         </ul>
                     </div>
                     {% endif %}
-
                     {% if complaint.extractedEntities.amounts %}
                     <div class="entity-group">
                         <div class="entity-label">💰 Amounts</div>
@@ -249,7 +675,6 @@
                         </ul>
                     </div>
                     {% endif %}
-
                     {% if complaint.extractedEntities.products %}
                     <div class="entity-group">
                         <div class="entity-label">🛍️ Products</div>
@@ -260,7 +685,6 @@
                         </ul>
                     </div>
                     {% endif %}
-
                     {% if complaint.extractedEntities.dates %}
                     <div class="entity-group">
                         <div class="entity-label">📅 Dates</div>
@@ -275,8 +699,6 @@
             </div>
         </div>
         {% endif %}
-
-        <!-- Resolution Info -->
         <div class="detail-section">
             <div class="section-header">⚡ Resolution Information</div>
             <div class="section-content">
@@ -289,9 +711,9 @@
                         <div class="info-label">Legal Implications</div>
                         <div class="info-value">
                             {% if complaint.legalImplications %}
-                                <span style="color: #e74c3c; font-weight: bold;">⚠️ Yes</span>
+                            <span style="color: #e74c3c; font-weight: bold;">⚠️ Yes</span>
                             {% else %}
-                                <span style="color: #27ae60;">✅ No</span>
+                            <span style="color: #27ae60;">✅ No</span>
                             {% endif %}
                         </div>
                     </div>
@@ -299,9 +721,9 @@
                         <div class="info-label">Compensation Required</div>
                         <div class="info-value">
                             {% if complaint.compensationRequired %}
-                                <span style="color: #f39c12; font-weight: bold;">💰 Yes</span>
+                            <span style="color: #f39c12; font-weight: bold;">💰 Yes</span>
                             {% else %}
-                                <span style="color: #27ae60;">❌ No</span>
+                            <span style="color: #27ae60;">❌ No</span>
                             {% endif %}
                         </div>
                     </div>
@@ -309,17 +731,15 @@
                         <div class="info-label">Follow-up Required</div>
                         <div class="info-value">
                             {% if complaint.followUpRequired %}
-                                <span style="color: #3498db; font-weight: bold;">📞 Yes</span>
+                            <span style="color: #3498db; font-weight: bold;">📞 Yes</span>
                             {% else %}
-                                <span style="color: #27ae60;">✅ No</span>
+                            <span style="color: #27ae60;">✅ No</span>
                             {% endif %}
                         </div>
                     </div>
                 </div>
             </div>
         </div>
-
-        <!-- Attachments -->
         {% if complaint.attachments %}
         <div class="detail-section">
             <div class="section-header">📎 Attachments</div>
@@ -327,44 +747,94 @@
                 <ul class="attachments-list">
                     {% for attachment in complaint.attachments %}
                     <li class="attachment-item">
-                        <div class="attachment-name">📄 {{ attachment.filename }}</div>
+                        <div class="attachment-header">
+                            <div class="attachment-name">
+                                📄 {{ attachment.filename }}
+                                {% if attachment.s3Url %}
+                                <span class="s3-status s3-available">☁️ Available</span>
+                                {% else %}
+                                <span class="s3-status s3-unavailable">❌ No File</span>
+                                {% endif %}
+                            </div>
+                        </div>
                         <div class="attachment-info">
-                            Type: {{ attachment.fileType.upper() }} | 
+                            Type: {{ attachment.fileType.upper() }} |
                             Size: {{ (attachment.fileSize / 1024)|round(1) }} KB
-                            {% if attachment.extractedText %}
-                            | Text extracted: {{ attachment.extractedText[:100] }}...
+                            {% if attachment.s3Url %}
+                            | Stored in S3
                             {% endif %}
                         </div>
+                        <div class="attachment-actions">
+                            {% if attachment.s3Url %}
+                            <a href="/download-attachment/{{ complaint._id }}/{{ attachment.filename }}"
+                                class="download-btn" download="{{ attachment.filename }}">
+                                📥 Download File
+                            </a>
+                            {% if attachment.fileType.lower() in ['jpg', 'jpeg', 'png', 'gif', 'bmp'] %}
+                            <button class="preview-toggle"
+                                onclick="toggleImagePreview('{{ loop.index0 }}', '{{ attachment.s3Url }}')">
+                                🖼️ Preview Image
+                            </button>
+                            {% endif %}
+                            {% else %}
+                            <span class="download-btn disabled">📥 File Not Available</span>
+                            {% endif %}
+                            {% if attachment.extractedText %}
+                            <button class="preview-toggle" onclick="toggleTextPreview('{{ loop.index0 }}')">
+                                📝 View Extracted Text
+                            </button>
+                            {% endif %}
+                        </div>
+                        {% if attachment.fileType.lower() in ['jpg', 'jpeg', 'png', 'gif', 'bmp'] %}
+                        <div id="image-preview-{{ loop.index0 }}" class="image-preview" style="display: none;">
+                            <img id="preview-img-{{ loop.index0 }}" src="" alt="Attachment preview"
+                                style="max-width: 100%; max-height: 400px; border: 1px solid #ddd; border-radius: 4px; margin-top: 10px;">
+                        </div>
+                        {% endif %}
+                        {% if attachment.extractedText %}
+                        <div id="text-preview-{{ loop.index0 }}" class="attachment-preview" style="display: none;">
+                            <strong>Extracted Text:</strong><br>
+                            {{ attachment.extractedText[:1000] }}
+                            {% if attachment.extractedText|length > 1000 %}
+                            <br><em>... (showing first 1000 characters, download file for complete content)</em>
+                            {% endif %}
+                        </div>
+                        {% endif %}
                     </li>
                     {% endfor %}
                 </ul>
             </div>
         </div>
         {% endif %}
-
-        <!-- Processing History -->
-        {% if complaint.processingHistory %}
-        <div class="detail-section">
-            <div class="section-header">📜 Processing History</div>
-            <div class="section-content">
-                <div class="history-timeline">
-                    {% for entry in complaint.processingHistory %}
-                    <div class="history-item">
-                        <div class="history-dot"></div>
-                        <div class="history-time">{{ entry.timestamp[:19].replace('T', ' ') }}</div>
-                        <div class="history-action">{{ entry.action.replace('_', ' ').title() }}</div>
-                        <div class="history-details">
-                            By: {{ entry.userId or 'System' }}
-                            {% if entry.details %}
-                            <br>{{ entry.details }}
-                            {% endif %}
-                        </div>
-                    </div>
-                    {% endfor %}
-                </div>
-            </div>
-        </div>
-        {% endif %}
     </div>
+    <script>
+        function toggleTextPreview(index) {
+            const preview = document.getElementById('text-preview-' + index);
+            if (preview.style.display === 'none') {
+                preview.style.display = 'block';
+            } else {
+                preview.style.display = 'none';
+            }
+        }
+        function toggleImagePreview(index, s3Url) {
+            const preview = document.getElementById('image-preview-' + index);
+            const img = document.getElementById('preview-img-' + index);
+            if (preview.style.display === 'none') {
+                img.src = s3Url;
+                preview.style.display = 'block';
+            } else {
+                preview.style.display = 'none';
+                img.src = '';
+            }
+        }
+        function togglePreview(index) {
+            const preview = document.getElementById('preview-' + index);
+            if (preview.style.display === 'none') {
+                preview.style.display = 'block';
+            } else {
+                preview.style.display = 'none';
+            }
+        }
+    </script>
 </body>
 </html>

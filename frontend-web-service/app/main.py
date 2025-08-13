@@ -1,11 +1,13 @@
 import os
 import logging
+import io
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
+from fastapi.responses import StreamingResponse
 import aiohttp
 from dotenv import load_dotenv
 
@@ -168,6 +170,58 @@ async def get_stats():
     except Exception as e:
         logger.error(f"Error fetching stats: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+    
+    
+@app.get("/download-attachment/{complaint_id}/{filename}")
+async def download_attachment(complaint_id: str, filename: str):
+    """Download attachment from S3 via email service"""
+    try:
+        # Get complaint details to find the S3 URL
+        async with aiohttp.ClientSession() as session:
+            async with session.get(f"{DATABASE_SERVICE_URL}/complaints/{complaint_id}") as response:
+                if response.status != 200:
+                    raise HTTPException(status_code=404, detail="Complaint not found")
+                
+                complaint = await response.json()
+                
+                # Find the attachment by filename
+                attachment = None
+                for att in complaint.get('attachments', []):
+                    if att['filename'] == filename:
+                        attachment = att
+                        break
+                
+                if not attachment or not attachment.get('s3Url'):
+                    raise HTTPException(status_code=404, detail="Attachment not found")
+                
+                # Get the S3 key from the URL
+                s3_url = attachment['s3Url']
+                # Extract the key part after the domain
+                if '.amazonaws.com/' in s3_url:
+                    s3_key = s3_url.split('.amazonaws.com/')[-1]
+                else:
+                    raise HTTPException(status_code=400, detail="Invalid S3 URL format")
+                
+                # Download through the email service
+                email_service_url = os.getenv("EMAIL_SERVICE_URL", "http://backend-email-service:8003")
+                async with session.get(f"{email_service_url}/attachment/{s3_key}") as download_response:
+                    if download_response.status != 200:
+                        raise HTTPException(status_code=404, detail="File not found in storage")
+                    
+                    content = await download_response.read()
+                    content_type = download_response.headers.get('content-type', 'application/octet-stream')
+                    
+                    return StreamingResponse(
+                        io.BytesIO(content),
+                        media_type=content_type,
+                        headers={"Content-Disposition": f"attachment; filename={filename}"}
+                    )
+                    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error downloading attachment: {e}")
+        raise HTTPException(status_code=500, detail=f"Download failed: {str(e)}")
 
 
 if __name__ == "__main__":
