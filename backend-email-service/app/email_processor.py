@@ -2,6 +2,7 @@ import os
 import sys
 import json
 import hashlib
+import re
 from datetime import datetime
 from typing import Any
 import io
@@ -488,7 +489,7 @@ class EmailProcessor:
             if await self._should_notify(analysis_data):
                 try:
                     await self._send_telegram_notification(
-                        analysis_data, complaint_id, customer_email, subject
+                        analysis_data, complaint_id, customer_email, subject, content  # Added content parameter
                     )
                     logger.info(
                         f"Telegram notification sent for complaint {complaint_id}"
@@ -542,10 +543,23 @@ class EmailProcessor:
             f"should_notify={should_notify}"
         )
         return should_notify
+    
+    def _get_clean_preview(self, content: str, max_length: int = 100) -> str:
+        """Get a clean preview without duplicates"""
+        clean_content = content.strip()
+        clean_content = re.sub(r'^(Fwd:|Re:|FW:|RE:)\s*', '', clean_content, flags=re.IGNORECASE)
+        sentences = clean_content.split('.')
+        if sentences and sentences[0]:
+            preview = sentences[0].strip()
+            if len(preview) > max_length:
+                preview = preview[:max_length] + '...'
+            return preview
+        
+        return clean_content[:max_length] + ('...' if len(clean_content) > max_length else '')
 
     async def _send_telegram_notification(
-        self, analysis_data: dict, complaint_id: str, customer_email: str, subject: str
-    ):
+    self, analysis_data: dict, complaint_id: str, customer_email: str, subject: str, content: str
+):
         """Send Telegram notification for high-priority complaints"""
         logger.info("Starting Telegram notification process...")
         token = os.getenv("TELEGRAM_BOT_TOKEN")
@@ -565,6 +579,7 @@ class EmailProcessor:
                 logger.warning("Telegram chat ID not configured for production mode")
                 return
             logger.info(f"Production mode - sending to chat: {chat_id}")
+        
         priority_emoji = {"high": "🚨", "medium": "⚠️", "low": "ℹ️"}.get(
             analysis_data.get("priority", "medium"), "ℹ️"
         )
@@ -572,16 +587,22 @@ class EmailProcessor:
             analysis_data.get("sentiment", "neutral"), "😐"
         )
         demo_header = "🎯 *LIVE DEMO* - AI Support System\n\n" if demo_mode else ""
+        
+        # Get clean preview - this should be the ONLY preview source
+        clean_preview = self._get_clean_preview(content, 100)
+        
+        # Build message without indentation and use only the clean preview
         message = f"""{demo_header}{priority_emoji} *New {analysis_data.get('priority', 'medium').title()} Priority Complaint*
-        📧 *Customer:* {customer_email}
-        📝 *Subject:* {subject[:50]}{'...' if len(subject) > 50 else ''}
-        ⚡ *Priority:* {analysis_data.get('priority', 'medium').upper()}
-        {sentiment_emoji} *Sentiment:* {analysis_data.get('sentiment', 'neutral').title()}
-        🏷️ *Category:* {analysis_data.get('category', 'other').title()}
-        🎯 *Confidence:* {int(analysis_data.get('confidenceScore', 0) * 100)}%
-        📄 *Preview:* {analysis_data.get('description', '')[:100]}{'...' if len(analysis_data.get('description', '')) > 100 else ''}
-        🔗 [View Details](http://localhost:8080/complaint/{complaint_id})
-        ⏰ *Received:* {datetime.utcnow().strftime('%H:%M %d/%m/%Y')}"""
+    📧 *Customer:* {customer_email}
+    📝 *Subject:* {subject[:50]}{'...' if len(subject) > 50 else ''}
+    ⚡ *Priority:* {analysis_data.get('priority', 'medium').upper()}
+    {sentiment_emoji} *Sentiment:* {analysis_data.get('sentiment', 'neutral').title()}
+    🏷️ *Category:* {analysis_data.get('category', 'other').title()}
+    🎯 *Confidence:* {int(analysis_data.get('confidenceScore', 0) * 100)}%
+    📄 *Preview:* {clean_preview}
+    🔗 [View Details](http://localhost:8080/complaint/{complaint_id})
+    ⏰ *Received:* {datetime.utcnow().strftime('%H:%M %d/%m/%Y')}"""
+        
         alerts = []
         if analysis_data.get("legalImplications"):
             alerts.append("⚖️ *LEGAL IMPLICATIONS DETECTED*")
@@ -593,17 +614,18 @@ class EmailProcessor:
             )
         if alerts:
             message += "\n\n🔴 *ALERTS:*\n" + "\n".join(alerts)
-        url = (
-            f"https://api.telegram.org/bot{os.getenv('TELEGRAM_BOT_TOKEN')}/sendMessage"
-        )
+        
+        url = f"https://api.telegram.org/bot{os.getenv('TELEGRAM_BOT_TOKEN')}/sendMessage"
         payload = {
             "chat_id": chat_id,
             "text": message.strip(),
             "parse_mode": "Markdown",
             "disable_web_page_preview": True,
         }
+        
         logger.info(f"Sending Telegram notification to {chat_id}")
         logger.debug(f"Message length: {len(message)} characters")
+        
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.post(url, json=payload) as response:
@@ -621,3 +643,4 @@ class EmailProcessor:
         except Exception as e:
             logger.error(f"❌ Failed to send Telegram notification: {e}")
             raise
+        
