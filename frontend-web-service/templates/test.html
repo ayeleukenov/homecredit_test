@@ -1,4 +1,3 @@
-<!-- web-interface-service/templates/test.html -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -109,7 +108,6 @@
             const submitBtn = document.getElementById('submitBtn');
             const resultDiv = document.getElementById('result');
             
-            // Disable button and show loading
             submitBtn.disabled = true;
             submitBtn.textContent = '⏳ Processing...';
             resultDiv.style.display = 'none';
@@ -152,7 +150,6 @@
                 `;
             }
             
-            // Reset button and show result
             submitBtn.disabled = false;
             submitBtn.textContent = '🚀 Process Email';
             resultDiv.style.display = 'block';

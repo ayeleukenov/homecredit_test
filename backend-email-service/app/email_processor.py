@@ -587,11 +587,7 @@ class EmailProcessor:
             analysis_data.get("sentiment", "neutral"), "😐"
         )
         demo_header = "🎯 *LIVE DEMO* - AI Support System\n\n" if demo_mode else ""
-        
-        # Get clean preview - this should be the ONLY preview source
         clean_preview = self._get_clean_preview(content, 100)
-        
-        # Build message without indentation and use only the clean preview
         message = f"""{demo_header}{priority_emoji} *New {analysis_data.get('priority', 'medium').title()} Priority Complaint*
     📧 *Customer:* {customer_email}
     📝 *Subject:* {subject[:50]}{'...' if len(subject) > 50 else ''}
