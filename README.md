@@ -112,12 +112,7 @@ Collection of postman requests will be provided alongside the .env files in a zi
 - **Other** - General inquiries
 
 ### Performance Metrics
-- Email processing: < 5 seconds per email
-- AI analysis with caching: < 1 second for cached results
-- Duplicate detection: < 100ms per check
-- Attachment processing: Varies by size (1-10 seconds)
-- System capacity: 1000+ emails/hour
-- Threshold for similarity is set to 0.7 
+- System capacity projected: 1000+ emails/hour
 
 ## 🛠️ Technological Stack
 
